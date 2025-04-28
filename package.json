@@ -18,6 +18,7 @@
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
     "@sanity/client": "^6.28.3",
+    "@sanity/color-input": "^4.0.3",
     "@sanity/vision": "^3.79.0",
     "child_process": "^1.0.2",
     "dotenv": "^16.4.7",
