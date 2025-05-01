@@ -26,12 +26,6 @@ export default {
       validation: Rule => Rule.required()
     },
     {
-      name: 'featuredPortfolios',
-      title: 'Featured Portfolios',
-      type: 'array',
-      of: [{type: 'reference', to: {type: 'portfolio'}}]
-    },
-    {
       name: 'heroImage',
       title: 'Hero Image',
       type: 'image',
@@ -40,10 +34,11 @@ export default {
       }
     },
     {
-      name: 'metaImage',
-      title: 'Meta Image',
-      type: 'image',
-      description: 'Image used for social media sharing'
+      name: 'isActive',
+      title: 'Currently Active',
+      type: 'boolean',
+      description: 'Set to true to make this the active site configuration',
+      initialValue: false
     },
     // New fields for background color and font
     {
@@ -53,20 +48,45 @@ export default {
       description: 'Choose a background color for the site'
     },
     {
+      name: 'textColor',
+      title: 'Text Color',
+      type: 'color',
+      description: 'Choose a text color for the site'
+    },
+    {
       name: 'font',
       title: 'Site Font',
       type: 'string',
       description: 'Choose a font for the site',
       options: {
         list: [
-          { title: 'Default', value: 'default' },
+          { title: 'EB Garamond (Current)', value: 'eb-garamond' },
+          
+          // Serif fonts
+          { title: 'Playfair Display', value: 'playfair-display' },
+          { title: 'Merriweather', value: 'merriweather' },
+          { title: 'Libre Baskerville', value: 'libre-baskerville' },
+          { title: 'Lora', value: 'lora' },
+          { title: 'Cormorant Garamond', value: 'cormorant-garamond' },
+          
+          // Sans-serif fonts
           { title: 'Open Sans', value: 'open-sans' },
           { title: 'Roboto', value: 'roboto' },
           { title: 'Lato', value: 'lato' },
-          { title: 'Montserrat', value: 'montserrat' }
-          // Add more fonts based on Raj's preferences
+          { title: 'Montserrat', value: 'montserrat' },
+          { title: 'Raleway', value: 'raleway' },
+          { title: 'Work Sans', value: 'work-sans' },
+          { title: 'Poppins', value: 'poppins' },
+          
+          // More artistic/display fonts
+          { title: 'Cormorant', value: 'cormorant' },
+          { title: 'Cinzel', value: 'cinzel' },
+          { title: 'Josefin Sans', value: 'josefin-sans' },
+          { title: 'Josefin Slab', value: 'josefin-slab' },
+          { title: 'Quicksand', value: 'quicksand' }
         ]
-      }
+      },
+      initialValue: 'eb-garamond'
     }
   ],
   preview: {
