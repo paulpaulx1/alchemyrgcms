@@ -251,17 +251,28 @@ Continue?`
             "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
               _id,
               title,
-              "isPublished": defined(_publishedAt)
+              "isPublished": defined(_publishedAt),
+              _publishedAt
             },
             "artworks": *[_type == "artwork" && _id in $artworkIds] {
               _id,
               title,
-              "isPublished": defined(_publishedAt)
+              "isPublished": defined(_publishedAt),
+              _publishedAt
             }
           }
         `, { 
           portfolioIds: allChildren.portfolios,
           artworkIds: allChildren.artworks.map(a => a._id)
+        })
+        
+        // Debug: Log the published status
+        console.log('📊 DEBUG - Published status check:')
+        currentTitles.portfolios.forEach(p => {
+          console.log(`📁 ${p.title}: isPublished=${p.isPublished}, _publishedAt=${p._publishedAt}`)
+        })
+        currentTitles.artworks.forEach(a => {
+          console.log(`🎨 ${a.title}: isPublished=${a.isPublished}, _publishedAt=${a._publishedAt}`)
         })
         
         // Create progress display
@@ -297,13 +308,18 @@ Continue?`
           // Unpublish if published
           if (portfolio.isPublished) {
             const publishedId = portfolio._id.replace('drafts.', '')
+            console.log(`🔍 Trying to unpublish: ${publishedId} (from ${portfolio._id})`)
             if (publishedId !== portfolio._id) {
               try {
                 await client.delete(publishedId)
                 updateProgress(portfolio.title, '📝 Unpublished')
               } catch (error) {
-                updateProgress(portfolio.title, '⚠️ Already unpublished')
+                console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
+                updateProgress(portfolio.title, '⚠️ Unpublish failed')
               }
+            } else {
+              console.log(`⚠️ No draft prefix found for ${portfolio._id}`)
+              updateProgress(portfolio.title, '⚠️ No draft prefix')
             }
           } else {
             updateProgress(portfolio.title, '📝 Already unpublished')
@@ -328,13 +344,18 @@ Continue?`
           // Unpublish if published
           if (artwork.isPublished) {
             const publishedId = artwork._id.replace('drafts.', '')
+            console.log(`🔍 Trying to unpublish: ${publishedId} (from ${artwork._id})`)
             if (publishedId !== artwork._id) {
               try {
                 await client.delete(publishedId)
                 updateProgress(artwork.title, '🎨 Unpublished')
               } catch (error) {
-                updateProgress(artwork.title, '⚠️ Already unpublished')
+                console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
+                updateProgress(artwork.title, '⚠️ Unpublish failed')
               }
+            } else {
+              console.log(`⚠️ No draft prefix found for ${artwork._id}`)
+              updateProgress(artwork.title, '⚠️ No draft prefix')
             }
           } else {
             updateProgress(artwork.title, '🎨 Already unpublished')
