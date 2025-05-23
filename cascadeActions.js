@@ -86,20 +86,38 @@ async function unpublishDocument(client, docId) {
 
 // TEST Unpublish Action - let's see what operations are available
 export function SmartUnpublishAction(props) {
-  const {id, type, onComplete} = props
-  const operations = useDocumentOperation(id, type)
-
-  return {
-    label: 'Cascade Unpublish',
-    icon: EyeClosedIcon,
-    tone: 'caution',
-    onHandle: async () => {
-      const client = props.getClient({apiVersion: '2023-03-01'})
-
-      try {
-        const allChildren = await collectAllChildren(client, id)
-
-        const confirmMessage = `⚠️ CASCADE UNPUBLISH ⚠️
+    const { id, type, onComplete } = props
+    const operations = useDocumentOperation(id, type)
+  
+    return {
+      label: 'Cascade Unpublish',
+      icon: EyeClosedIcon,
+      tone: 'caution',
+      onHandle: async () => {
+        const client = props.getClient({ apiVersion: '2023-03-01' })
+  
+        // Helper to simulate unpublish
+        async function unpublishDocument(docId) {
+          const draftId = `drafts.${docId}`
+          const publishedDoc = await client.getDocument(docId)
+          if (!publishedDoc) {
+            console.log(`⚠️ Document ${docId} is already unpublished.`)
+            return
+          }
+  
+          await client
+            .transaction()
+            .createIfNotExists({ ...publishedDoc, _id: draftId })
+            .delete(docId)
+            .commit()
+  
+          console.log(`✅ Unpublished document: ${docId}`)
+        }
+  
+        try {
+          const allChildren = await collectAllChildren(client, id)
+  
+          const confirmMessage = `⚠️ CASCADE UNPUBLISH ⚠️
   
   This will unpublish:
   • ${allChildren.artworks.length} artworks
@@ -107,39 +125,50 @@ export function SmartUnpublishAction(props) {
   • 1 main portfolio
   
   Continue?`
-
-        const confirmed = window.confirm(confirmMessage)
-        if (!confirmed) return
-
-        // Unpublish artworks first
-        for (const artwork of allChildren.artworks) {
-          await unpublishDocument(client, artwork._id)
+  
+          const confirmed = window.confirm(confirmMessage)
+          if (!confirmed) return
+  
+          // --- Unpublish children ---
+  
+          // Unpublish artworks
+          for (const artwork of allChildren.artworks) {
+            await unpublishDocument(artwork._id)
+          }
+  
+          // Unpublish child portfolios (excluding the main one)
+          const childPortfolios = allChildren.portfolios.filter(pid => pid !== id)
+          for (const portfolioId of childPortfolios.reverse()) {
+            await unpublishDocument(portfolioId)
+          }
+  
+          // --- Unpublish main portfolio last ---
+  
+          const draft = await client.getDocument(`drafts.${id}`)
+          const published = await client.getDocument(id)
+  
+          console.log('📄 Main portfolio draft exists:', !!draft)
+          console.log('📄 Main portfolio published exists:', !!published)
+          console.log('⚙️ Built-in unpublish available:', !!operations.unpublish)
+          console.log('🚫 Built-in unpublish disabled:', operations.unpublish?.disabled)
+  
+          if (operations.unpublish && !operations.unpublish.disabled) {
+            console.log('🚀 Using built-in unpublish for main portfolio...')
+            operations.unpublish.execute()
+          } else {
+            console.log('⚠️ Using fallback unpublish for main portfolio...')
+            await unpublishDocument(id)
+          }
+  
+          alert('✅ Cascade unpublish complete!')
+          onComplete()
+        } catch (error) {
+          console.error('❌ Cascade unpublish failed:', error)
+          alert(`Cascade unpublish failed: ${error.message}`)
         }
-
-        // Unpublish child portfolios
-        const childPortfolios = allChildren.portfolios.filter((pid) => pid !== id)
-        for (const portfolioId of childPortfolios.reverse()) {
-          await unpublishDocument(client, portfolioId)
-        }
-
-        // Unpublish the main portfolio last
-        if (operations.unpublish) {
-          operations.unpublish.execute()
-          console.log('✅ Unpublished main portfolio')
-        } else {
-          await unpublishDocument(client, id)
-          console.log('✅ Unpublished main portfolio (fallback)')
-        }
-
-        alert('✅ Cascade unpublish complete!')
-        onComplete()
-      } catch (error) {
-        console.error('❌ Cascade unpublish failed:', error)
-        alert(`Cascade unpublish failed: ${error.message}`)
       }
-    },
+    }
   }
-}
 
 // Proper Publish Action
 export function SmartPublishAction(props) {
