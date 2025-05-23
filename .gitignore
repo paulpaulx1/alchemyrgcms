@@ -5,6 +5,10 @@
 
 /processed-images
 /rg-processed
+/media/
+/processed/
+/rg-processed/
+/processed-images/
 
 # Dependencies
 /node_modules
