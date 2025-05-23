@@ -307,19 +307,33 @@ Continue?`
           
           // Unpublish if published
           if (portfolio.isPublished) {
-            const publishedId = portfolio._id.replace('drafts.', '')
-            console.log(`🔍 Trying to unpublish: ${publishedId} (from ${portfolio._id})`)
-            if (publishedId !== portfolio._id) {
-              try {
+            const publishedId = portfolio._id
+            const draftId = `drafts.${publishedId}`
+            
+            console.log(`🔍 Unpublishing: ${publishedId} → creating draft ${draftId}`)
+            
+            try {
+              // First, get the current document content
+              const docContent = await client.fetch(`*[_id == $publishedId][0]`, { publishedId })
+              
+              if (docContent) {
+                // Create a draft version
+                await client.createOrReplace({
+                  ...docContent,
+                  _id: draftId
+                })
+                
+                // Then delete the published version
                 await client.delete(publishedId)
-                updateProgress(portfolio.title, '📝 Unpublished')
-              } catch (error) {
-                console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
-                updateProgress(portfolio.title, '⚠️ Unpublish failed')
+                
+                updateProgress(portfolio.title, '📝 Unpublished (draft created)')
+              } else {
+                updateProgress(portfolio.title, '⚠️ Document not found')
               }
-            } else {
-              console.log(`⚠️ No draft prefix found for ${portfolio._id}`)
-              updateProgress(portfolio.title, '⚠️ No draft prefix')
+              
+            } catch (error) {
+              console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
+              updateProgress(portfolio.title, '⚠️ Unpublish failed')
             }
           } else {
             updateProgress(portfolio.title, '📝 Already unpublished')
@@ -343,19 +357,33 @@ Continue?`
           
           // Unpublish if published
           if (artwork.isPublished) {
-            const publishedId = artwork._id.replace('drafts.', '')
-            console.log(`🔍 Trying to unpublish: ${publishedId} (from ${artwork._id})`)
-            if (publishedId !== artwork._id) {
-              try {
+            const publishedId = artwork._id
+            const draftId = `drafts.${publishedId}`
+            
+            console.log(`🔍 Unpublishing: ${publishedId} → creating draft ${draftId}`)
+            
+            try {
+              // First, get the current document content
+              const docContent = await client.fetch(`*[_id == $publishedId][0]`, { publishedId })
+              
+              if (docContent) {
+                // Create a draft version
+                await client.createOrReplace({
+                  ...docContent,
+                  _id: draftId
+                })
+                
+                // Then delete the published version
                 await client.delete(publishedId)
-                updateProgress(artwork.title, '🎨 Unpublished')
-              } catch (error) {
-                console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
-                updateProgress(artwork.title, '⚠️ Unpublish failed')
+                
+                updateProgress(artwork.title, '🎨 Unpublished (draft created)')
+              } else {
+                updateProgress(artwork.title, '⚠️ Document not found')
               }
-            } else {
-              console.log(`⚠️ No draft prefix found for ${artwork._id}`)
-              updateProgress(artwork.title, '⚠️ No draft prefix')
+              
+            } catch (error) {
+              console.log(`❌ Error unpublishing ${publishedId}:`, error.message)
+              updateProgress(artwork.title, '⚠️ Unpublish failed')
             }
           } else {
             updateProgress(artwork.title, '🎨 Already unpublished')
