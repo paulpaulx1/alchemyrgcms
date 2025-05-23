@@ -74,12 +74,12 @@ export function SmartPublishAction(props) {
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const cleanedTitle = cleanTitle(currentDoc.title)
           
-          await client.patch(id)
-            .set({ 
+          await client.patch(id, patch => 
+            patch.set({ 
               _publishedAt: new Date().toISOString(),
               title: cleanedTitle
             })
-            .commit()
+          ).commit()
           onComplete()
           return
         }
@@ -148,18 +148,22 @@ Continue?`
         
         // Publish all portfolios and clean titles
         allCurrentTitles.portfolios.forEach(portfolio => {
-          transaction.patch(portfolio._id).set({ 
-            _publishedAt: publishTime,
-            title: cleanTitle(portfolio.title)
-          })
+          transaction.patch(portfolio._id, patch => 
+            patch.set({ 
+              _publishedAt: publishTime,
+              title: cleanTitle(portfolio.title)
+            })
+          )
         })
         
         // Publish all artworks and clean titles
         allCurrentTitles.artworks.forEach(artwork => {
-          transaction.patch(artwork._id).set({ 
-            _publishedAt: publishTime,
-            title: cleanTitle(artwork.title)
-          })
+          transaction.patch(artwork._id, patch => 
+            patch.set({ 
+              _publishedAt: publishTime,
+              title: cleanTitle(artwork.title)
+            })
+          )
         })
         
         await transaction.commit()
