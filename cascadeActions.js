@@ -70,14 +70,19 @@ export function SmartPublishAction(props) {
         const portfolioHasChildren = await hasChildren(client, id)
         
         if (!portfolioHasChildren) {
-          // No children - normal publish and clean title
+          // No children - normal publish and clean title using mutate API
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const cleanedTitle = cleanTitle(currentDoc.title)
           
-          await client.patch(id).set({ 
-            _publishedAt: new Date().toISOString(),
-            title: cleanedTitle
-          }).commit()
+          await client.mutate([{
+            patch: {
+              id: id,
+              set: { 
+                _publishedAt: new Date().toISOString(),
+                title: cleanedTitle
+              }
+            }
+          }])
           onComplete()
           return
         }
@@ -140,27 +145,38 @@ Continue?`
           artworkIds: allChildren.artworks.map(a => a._id)
         })
         
-        // Execute cascade publish with title cleanup
-        const transaction = client.transaction()
+        // Execute cascade publish with title cleanup using mutate API
+        const mutations = []
         const publishTime = new Date().toISOString()
         
-        // Publish all portfolios and clean titles
+        // Create mutation objects for portfolios
         allCurrentTitles.portfolios.forEach(portfolio => {
-          transaction.patch(portfolio._id).set({ 
-            _publishedAt: publishTime,
-            title: cleanTitle(portfolio.title)
+          mutations.push({
+            patch: {
+              id: portfolio._id,
+              set: { 
+                _publishedAt: publishTime,
+                title: cleanTitle(portfolio.title)
+              }
+            }
           })
         })
         
-        // Publish all artworks and clean titles
+        // Create mutation objects for artworks
         allCurrentTitles.artworks.forEach(artwork => {
-          transaction.patch(artwork._id).set({ 
-            _publishedAt: publishTime,
-            title: cleanTitle(artwork.title)
+          mutations.push({
+            patch: {
+              id: artwork._id,
+              set: { 
+                _publishedAt: publishTime,
+                title: cleanTitle(artwork.title)
+              }
+            }
           })
         })
         
-        await transaction.commit()
+        // Execute all mutations at once
+        await client.mutate(mutations)
         
         console.log(`✅ Cascade publish completed with title cleanup`)
         onComplete()
@@ -222,20 +238,28 @@ Continue with cascade delete?`
         const confirmed = window.confirm(confirmMessage)
         if (!confirmed) return
         
-        // Execute cascade delete
-        const transaction = client.transaction()
+        // Execute cascade delete using mutate API
+        const mutations = []
         
         // Delete artworks first
         allChildren.artworks.forEach(artwork => {
-          transaction.delete(artwork._id)
+          mutations.push({
+            delete: {
+              id: artwork._id
+            }
+          })
         })
         
         // Delete portfolios (reverse order to delete children first)
         allChildren.portfolios.reverse().forEach(portfolioId => {
-          transaction.delete(portfolioId)
+          mutations.push({
+            delete: {
+              id: portfolioId
+            }
+          })
         })
         
-        await transaction.commit()
+        await client.mutate(mutations)
         
         console.log(`✅ Cascade delete completed`)
         onComplete()
