@@ -85,90 +85,78 @@ async function unpublishDocument(client, docId) {
 }
 
 // TEST Unpublish Action - let's see what operations are available
+// sanity-cms/cascadeActions.js
+import { EyeClosedIcon }    from '@sanity/icons'
+import { useDocumentOperation } from 'sanity'
+
+// … (keep your existing hasChildren, collectAllChildren, cleanTitle) …
+
+// Only unpublish if a live document exists
+async function safeUnpublishDocument(client, docId) {
+  const published = await client.getDocument(docId)
+  if (!published) {
+    console.log(`⚠️ ${docId} not published—skipping.`)
+    return
+  }
+  await client
+    .transaction()
+    .createIfNotExists({ ...published, _id: `drafts.${docId}` })
+    .delete(docId)
+    .commit()
+  console.log(`✅ Unpublished: ${docId}`)
+}
+
+// ——— Cascade Unpublish —————————————————————————————
 export function SmartUnpublishAction(props) {
-    const { id, type, onComplete } = props
-    const operations = useDocumentOperation(id, type)
-  
-    return {
-      label: 'Cascade Unpublish',
-      icon: EyeClosedIcon,
-      tone: 'caution',
-      onHandle: async () => {
-        const client = props.getClient({ apiVersion: '2023-03-01' })
-  
-        // Helper to simulate unpublish
-        async function unpublishDocument(docId) {
-          const draftId = `drafts.${docId}`
-          const publishedDoc = await client.getDocument(docId)
-          if (!publishedDoc) {
-            console.log(`⚠️ Document ${docId} is already unpublished.`)
-            return
-          }
-  
-          await client
-            .transaction()
-            .createIfNotExists({ ...publishedDoc, _id: draftId })
-            .delete(docId)
-            .commit()
-  
-          console.log(`✅ Unpublished document: ${docId}`)
+  const { id, type, onComplete } = props
+  const operations = useDocumentOperation(id, type)
+
+  return {
+    label: 'Cascade Unpublish',
+    icon: EyeClosedIcon,
+    tone: 'caution',
+    onHandle: async () => {
+      const client = props.getClient({ apiVersion: '2023-03-01' })
+
+      try {
+        const { portfolios, artworks } = await collectAllChildren(client, id)
+
+        if (!window.confirm(
+          `⚠️ CASCADE UNPUBLISH ⚠️\n\n` +
+          `This will unpublish:\n` +
+          `• ${artworks.length} artworks\n` +
+          `• ${portfolios.length - 1} sub-portfolios\n` +
+          `• 1 main portfolio\n\nContinue?`
+        )) return
+
+        // 1) Unpublish all artworks
+        for (const a of artworks) {
+          await safeUnpublishDocument(client, a._id)
         }
-  
-        try {
-          const allChildren = await collectAllChildren(client, id)
-  
-          const confirmMessage = `⚠️ CASCADE UNPUBLISH ⚠️
-  
-  This will unpublish:
-  • ${allChildren.artworks.length} artworks
-  • ${allChildren.portfolios.length - 1} sub-portfolios
-  • 1 main portfolio
-  
-  Continue?`
-  
-          const confirmed = window.confirm(confirmMessage)
-          if (!confirmed) return
-  
-          // --- Unpublish children ---
-  
-          // Unpublish artworks
-          for (const artwork of allChildren.artworks) {
-            await unpublishDocument(artwork._id)
-          }
-  
-          // Unpublish child portfolios (excluding the main one)
-          const childPortfolios = allChildren.portfolios.filter(pid => pid !== id)
-          for (const portfolioId of childPortfolios.reverse()) {
-            await unpublishDocument(portfolioId)
-          }
-  
-          // --- Unpublish main portfolio last ---
-  
-          const draft = await client.getDocument(`drafts.${id}`)
-          const published = await client.getDocument(id)
-  
-          console.log('📄 Main portfolio draft exists:', !!draft)
-          console.log('📄 Main portfolio published exists:', !!published)
-          console.log('⚙️ Built-in unpublish available:', !!operations.unpublish)
-          console.log('🚫 Built-in unpublish disabled:', operations.unpublish?.disabled)
-  
-          if (operations.unpublish && !operations.unpublish.disabled) {
-            console.log('🚀 Using built-in unpublish for main portfolio...')
-            operations.unpublish.execute()
-          } else {
-            console.log('⚠️ Using fallback unpublish for main portfolio...')
-            await unpublishDocument(id)
-          }
-  
-          alert('✅ Cascade unpublish complete!')
-          onComplete()
-        } catch (error) {
-          console.error('❌ Cascade unpublish failed:', error)
-          alert(`Cascade unpublish failed: ${error.message}`)
+
+        // 2) Unpublish sub-portfolios (deepest first)
+        const childPorts = portfolios.filter(pid => pid !== id).reverse()
+        for (const pid of childPorts) {
+          await safeUnpublishDocument(client, pid)
         }
+
+        // 3) Finally, unpublish the parent portfolio
+        const canBuiltin = operations.unpublish && !operations.unpublish.disabled
+        if (canBuiltin) {
+          operations.unpublish.execute()
+        } else {
+          await safeUnpublishDocument(client, id)
+        }
+
+        alert('✅ Cascade unpublish complete!')
+        onComplete()
+      } catch (err) {
+        console.error('❌ Cascade unpublish failed:', err)
+        alert(`Cascade unpublish failed: ${err.message}`)
       }
     }
   }
+}
 
 // Proper Publish Action
 export function SmartPublishAction(props) {
