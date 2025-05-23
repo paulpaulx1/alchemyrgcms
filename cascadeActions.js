@@ -54,15 +54,11 @@ async function collectAllChildren(client, portfolioId) {
 // Smart Delete Action
 export function createSmartDeleteAction(originalAction) {
   return (props) => {
-    const originalResult = originalAction(props)
-    
-    // Only apply to portfolio documents
-    if (props.type !== 'portfolio') {
-      return originalResult
-    }
-    
+    // Return the action object directly, not a function
     return {
-      ...originalResult,
+      label: 'Delete',
+      icon: TrashIcon,
+      tone: 'critical',
       onHandle: async () => {
         const { id, getClient } = props
         const client = getClient({ apiVersion: '2023-03-01' })
@@ -114,7 +110,7 @@ Continue with cascade delete?`
           
           // Final confirmation
           const finalConfirm = window.confirm(
-            `FINAL CONFIRMATION\n\nDelete ${portfolioDetails.length} portfolios and ${allChildren.artworks.length} artworks permanently?\n\nType "DELETE" to confirm this is really what you want.`
+            `FINAL CONFIRMATION\n\nDelete ${portfolioDetails.length} portfolios and ${allChildren.artworks.length} artworks permanently?\n\nThis cannot be undone!`
           )
           if (!finalConfirm) return
           
@@ -154,14 +150,10 @@ Continue with cascade delete?`
 // Smart Unpublish Action
 export function createSmartUnpublishAction(originalAction) {
   return (props) => {
-    const originalResult = originalAction(props)
-    
-    if (props.type !== 'portfolio') {
-      return originalResult
-    }
-    
     return {
-      ...originalResult,
+      label: 'Unpublish',
+      icon: EyeClosedIcon,
+      tone: 'caution',
       onHandle: async () => {
         const { id, getClient } = props
         const client = getClient({ apiVersion: '2023-03-01' })
