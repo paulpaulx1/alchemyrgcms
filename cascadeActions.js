@@ -74,17 +74,15 @@ export function SmartPublishAction(props) {
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const cleanedTitle = cleanTitle(currentDoc.title)
           
-          await client.mutate({
-            mutations: [{
-              patch: {
-                id: id,
-                set: { 
-                  _publishedAt: new Date().toISOString(),
-                  title: cleanedTitle
-                }
+          await client.mutate([{
+            patch: {
+              id: id,
+              set: { 
+                _publishedAt: new Date().toISOString(),
+                title: cleanedTitle
               }
-            }]
-          })
+            }
+          }])
           onComplete()
           return
         }
@@ -178,7 +176,7 @@ Continue?`
         })
         
         // Execute all mutations at once
-        await client.mutate({ mutations })
+        await client.mutate(mutations)
         
         console.log(`✅ Cascade publish completed with title cleanup`)
         onComplete()
@@ -213,15 +211,13 @@ export function SmartUnpublishAction(props) {
             : `${currentDoc.title} unpublished`
             
           // Use mutate API directly
-          await client.mutate({
-            mutations: [{
-              patch: {
-                id: id,
-                unset: ['_publishedAt'],
-                set: { title: newTitle }
-              }
-            }]
-          })
+          await client.mutate([{
+            patch: {
+              id: id,
+              unset: ['_publishedAt'],
+              set: { title: newTitle }
+            }
+          }])
           onComplete()
           return
         }
@@ -289,7 +285,7 @@ Continue?`
         })
         
         // Execute all mutations at once
-        await client.mutate({ mutations })
+        await client.mutate(mutations)
         
         console.log(`✅ Cascade unpublish completed with title updates`)
         onComplete()
@@ -322,13 +318,11 @@ export function SmartDeleteAction(props) {
           // No children - use normal delete with simple confirmation
           const confirmed = window.confirm('Delete this portfolio permanently?')
           if (confirmed) {
-            await client.mutate({
-              mutations: [{
-                delete: {
-                  id: id
-                }
-              }]
-            })
+            await client.mutate([{
+              delete: {
+                id: id
+              }
+            }])
             onComplete()
           }
           return
@@ -380,7 +374,7 @@ Continue with cascade delete?`
           })
         })
         
-        await client.mutate({ mutations })
+        await client.mutate(mutations)
         
         console.log(`✅ Cascade delete completed`)
         onComplete()
