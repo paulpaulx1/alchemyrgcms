@@ -5,7 +5,7 @@ import {schemaTypes} from './schemaTypes'
 import {colorInput} from '@sanity/color-input'
 
 // Import the smart cascade actions
-import { smartDeleteAction, smartUnpublishAction } from './cascadeActions'
+import { SmartDeleteAction, SmartUnpublishAction } from './cascadeActions'
 
 console.log(process.env);
 export default defineConfig({
@@ -29,9 +29,9 @@ export default defineConfig({
         return [
           // Keep all original actions except delete and unpublish
           ...prev.filter(action => action.action !== 'delete' && action.action !== 'unpublish'),
-          // Add our smart actions
-          smartDeleteAction,
-          smartUnpublishAction
+          // Add our smart actions with context passed
+          (props) => SmartDeleteAction({...props, getClient: context.getClient}),
+          (props) => SmartUnpublishAction({...props, getClient: context.getClient})
         ]
       }
       

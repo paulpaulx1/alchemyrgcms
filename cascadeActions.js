@@ -50,15 +50,17 @@ async function collectAllChildren(client, portfolioId) {
   }
 }
 
-// Smart Delete Action - simplified structure
-export const smartDeleteAction = (props) => {
+// Smart Delete Action - following official Sanity docs structure
+export function SmartDeleteAction(props) {
+  const { id, type, onComplete } = props
+  
   return {
     label: 'Delete',
     icon: TrashIcon,
     tone: 'critical',
     onHandle: async () => {
-      const { id, getClient } = props
-      const client = getClient({ apiVersion: '2023-03-01' })
+      // Get the client from context 
+      const client = props.getClient({ apiVersion: '2023-03-01' })
       
       try {
         // Check if this portfolio has children
@@ -69,8 +71,7 @@ export const smartDeleteAction = (props) => {
           const confirmed = window.confirm('Delete this portfolio permanently?')
           if (confirmed) {
             await client.delete(id)
-            // Navigate away
-            window.history.back()
+            onComplete()
           }
           return
         }
@@ -116,7 +117,7 @@ Continue with cascade delete?`
         await transaction.commit()
         
         console.log(`✅ Cascade delete completed`)
-        window.history.back()
+        onComplete()
         
       } catch (error) {
         console.error('❌ Delete failed:', error)
@@ -127,14 +128,15 @@ Continue with cascade delete?`
 }
 
 // Smart Unpublish Action
-export const smartUnpublishAction = (props) => {
+export function SmartUnpublishAction(props) {
+  const { id, type, onComplete } = props
+  
   return {
     label: 'Unpublish',
     icon: EyeClosedIcon,
     tone: 'caution',
     onHandle: async () => {
-      const { id, getClient } = props
-      const client = getClient({ apiVersion: '2023-03-01' })
+      const client = props.getClient({ apiVersion: '2023-03-01' })
       
       try {
         const portfolioHasChildren = await hasChildren(client, id)
@@ -142,6 +144,7 @@ export const smartUnpublishAction = (props) => {
         if (!portfolioHasChildren) {
           // No children - normal unpublish
           await client.patch(id).unset(['_publishedAt']).commit()
+          onComplete()
           return
         }
         
@@ -173,6 +176,7 @@ Continue?`
         await transaction.commit()
         
         console.log(`✅ Cascade unpublish completed`)
+        onComplete()
         
       } catch (error) {
         console.error('❌ Unpublish failed:', error)
