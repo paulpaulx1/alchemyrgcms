@@ -59,135 +59,63 @@ function cleanTitle(title) {
   return title.replace(/\s*unpublished\s*$/i, '').trim()
 }
 
-// Proper Unpublish Action using useDocumentOperation
+// TEST Unpublish Action - let's see what operations are available
 export function SmartUnpublishAction(props) {
   const { id, type, onComplete } = props
   
   return {
-    label: 'Cascade Unpublish',
+    label: 'Test Unpublish',
     icon: EyeClosedIcon,
     tone: 'caution',
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
       
-      try {
-        const portfolioHasChildren = await hasChildren(client, id)
+      // Let's see what operations useDocumentOperation actually provides
+      const operations = useDocumentOperation(props.id, props.type)
+      console.log('🔍 Available operations:', Object.keys(operations))
+      console.log('🔍 Full operations object:', operations)
+      
+      // Try to destructure common operations
+      const { 
+        patch, 
+        publish, 
+        unpublish, 
+        del, 
+        delete: deleteOp,
+        duplicate,
+        discardChanges,
+        restore
+      } = operations
+      
+      console.log('📝 patch:', patch)
+      console.log('📢 publish:', publish)
+      console.log('📤 unpublish:', unpublish)
+      console.log('🗑️ delete:', deleteOp)
+      console.log('🗑️ del:', del)
+      console.log('📋 duplicate:', duplicate)
+      console.log('↩️ discardChanges:', discardChanges)
+      console.log('🔄 restore:', restore)
+      
+      // If unpublish exists, try to use it
+      if (unpublish) {
+        console.log('✅ Found unpublish operation!')
+        console.log('unpublish.disabled:', unpublish.disabled)
         
-        if (!portfolioHasChildren) {
-          // No children - just update title and show message
-          const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
-          const newTitle = currentDoc.title.includes('unpublished') 
-            ? currentDoc.title 
-            : `${currentDoc.title} unpublished`
-          
-          await client.mutate([{
-            patch: {
-              id: id,
-              set: { title: newTitle }
-            }
-          }])
-          
-          alert('✅ Title updated with "unpublished".\n\n📝 Now click the standard "Unpublish" button to actually unpublish this document.')
-          onComplete()
-          return
+        const confirmed = window.confirm('Test unpublish operation?')
+        if (confirmed) {
+          try {
+            console.log('🚀 Executing unpublish...')
+            unpublish.execute()
+            console.log('✅ Unpublish executed successfully!')
+            onComplete()
+          } catch (error) {
+            console.error('❌ Unpublish failed:', error)
+            alert(`Unpublish failed: ${error.message}`)
+          }
         }
-        
-        // Has children - show cascade confirmation
-        const allChildren = await collectAllChildren(client, id)
-        
-        const confirmMessage = `📝 CASCADE UNPUBLISH
-
-This will:
-1. Update titles with "unpublished" for easier searching
-2. Show you a list of documents to manually unpublish
-
-Items to process:
-• 1 portfolio
-• ${allChildren.artworks.length} artworks
-
-Continue?`
-        
-        const confirmed = window.confirm(confirmMessage)
-        if (!confirmed) return
-        
-        // Get all items with their current titles
-        const allItems = await client.fetch(`
-          {
-            "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
-              _id,
-              title,
-              _type
-            },
-            "artworks": *[_type == "artwork" && _id in $artworkIds] {
-              _id,
-              title,
-              _type
-            }
-          }
-        `, { 
-          portfolioIds: allChildren.portfolios,
-          artworkIds: allChildren.artworks.map(a => a._id)
-        })
-        
-        // Update titles only - no unpublishing via API
-        const mutations = []
-        const itemsToUnpublish = []
-        
-        allItems.portfolios.forEach(portfolio => {
-          const newTitle = portfolio.title.includes('unpublished') 
-            ? portfolio.title 
-            : `${portfolio.title} unpublished`
-            
-          if (newTitle !== portfolio.title) {
-            mutations.push({
-              patch: {
-                id: portfolio._id,
-                set: { title: newTitle }
-              }
-            })
-          }
-          itemsToUnpublish.push(`📁 ${portfolio.title} (Portfolio)`)
-        })
-        
-        allItems.artworks.forEach(artwork => {
-          const newTitle = artwork.title.includes('unpublished') 
-            ? artwork.title 
-            : `${artwork.title} unpublished`
-            
-          if (newTitle !== artwork.title) {
-            mutations.push({
-              patch: {
-                id: artwork._id,
-                set: { title: newTitle }
-              }
-            })
-          }
-          itemsToUnpublish.push(`🎨 ${artwork.title} (Artwork)`)
-        })
-        
-        // Execute title updates
-        if (mutations.length > 0) {
-          await client.mutate(mutations)
-        }
-        
-        // Show completion message with manual steps
-        const message = `✅ CASCADE TITLE UPDATE COMPLETED!
-
-Updated ${mutations.length} titles with "unpublished".
-
-📋 NEXT STEPS - Manually unpublish these items:
-
-${itemsToUnpublish.slice(0, 10).join('\n')}${itemsToUnpublish.length > 10 ? `\n... and ${itemsToUnpublish.length - 10} more` : ''}
-
-💡 TIP: Search for "unpublished" in Sanity to find all tagged items, then use the standard Unpublish button on each one.`
-        
-        alert(message)
-        console.log('📋 Items to manually unpublish:', itemsToUnpublish)
-        onComplete()
-        
-      } catch (error) {
-        console.error('❌ Cascade operation failed:', error)
-        alert(`Operation failed: ${error.message}`)
+      } else {
+        console.log('❌ No unpublish operation found')
+        alert('No unpublish operation available. Check console for available operations.')
       }
     }
   }
