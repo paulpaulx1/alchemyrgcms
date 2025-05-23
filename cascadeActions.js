@@ -50,7 +50,130 @@ async function collectAllChildren(client, portfolioId) {
   }
 }
 
-// Smart Delete Action - following official Sanity docs structure
+// Helper function to clean "unpublished" from titles
+function cleanTitle(title) {
+  return title.replace(/\s*unpublished\s*$/i, '').trim()
+}
+
+// Smart Publish Action - publishes portfolio and all unpublished children
+export function SmartPublishAction(props) {
+  const { id, type, onComplete } = props
+  
+  return {
+    label: 'Publish',
+    icon: 'publish', // or import PublishIcon
+    tone: 'positive',
+    onHandle: async () => {
+      const client = props.getClient({ apiVersion: '2023-03-01' })
+      
+      try {
+        const portfolioHasChildren = await hasChildren(client, id)
+        
+        if (!portfolioHasChildren) {
+          // No children - normal publish and clean title
+          const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
+          const cleanedTitle = cleanTitle(currentDoc.title)
+          
+          await client.patch(id)
+            .set({ 
+              _publishedAt: new Date().toISOString(),
+              title: cleanedTitle
+            })
+            .commit()
+          onComplete()
+          return
+        }
+        
+        // Has children - show cascade confirmation
+        const allChildren = await collectAllChildren(client, id)
+        
+        // Check which ones are actually unpublished
+        const unpublishedItems = await client.fetch(`
+          {
+            "portfolios": *[_type == "portfolio" && _id in $portfolioIds && !defined(_publishedAt)] {
+              _id,
+              title
+            },
+            "artworks": *[_type == "artwork" && _id in $artworkIds && !defined(_publishedAt)] {
+              _id,
+              title
+            }
+          }
+        `, { 
+          portfolioIds: allChildren.portfolios,
+          artworkIds: allChildren.artworks.map(a => a._id)
+        })
+        
+        const totalUnpublished = unpublishedItems.portfolios.length + unpublishedItems.artworks.length
+        
+        if (totalUnpublished === 0) {
+          // Everything is already published
+          const confirmed = window.confirm('This portfolio and all its children are already published. Publish anyway to update timestamps and clean titles?')
+          if (!confirmed) return
+        } else {
+          // Show cascade publish confirmation
+          const confirmMessage = `📢 CASCADE PUBLISH
+
+This will publish this portfolio and all unpublished children, and remove "unpublished" from titles:
+
+📁 ${unpublishedItems.portfolios.length} Unpublished Portfolio(s)
+🎨 ${unpublishedItems.artworks.length} Unpublished Artwork(s)
+
+Continue?`
+          
+          const confirmed = window.confirm(confirmMessage)
+          if (!confirmed) return
+        }
+        
+        // Get current titles for all items to clean them
+        const allCurrentTitles = await client.fetch(`
+          {
+            "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
+              _id,
+              title
+            },
+            "artworks": *[_type == "artwork" && _id in $artworkIds] {
+              _id,
+              title
+            }
+          }
+        `, { 
+          portfolioIds: allChildren.portfolios,
+          artworkIds: allChildren.artworks.map(a => a._id)
+        })
+        
+        // Execute cascade publish with title cleanup
+        const transaction = client.transaction()
+        const publishTime = new Date().toISOString()
+        
+        // Publish all portfolios and clean titles
+        allCurrentTitles.portfolios.forEach(portfolio => {
+          transaction.patch(portfolio._id).set({ 
+            _publishedAt: publishTime,
+            title: cleanTitle(portfolio.title)
+          })
+        })
+        
+        // Publish all artworks and clean titles
+        allCurrentTitles.artworks.forEach(artwork => {
+          transaction.patch(artwork._id).set({ 
+            _publishedAt: publishTime,
+            title: cleanTitle(artwork.title)
+          })
+        })
+        
+        await transaction.commit()
+        
+        console.log(`✅ Cascade publish completed with title cleanup`)
+        onComplete()
+        
+      } catch (error) {
+        console.error('❌ Publish failed:', error)
+        alert(`Publish failed: ${error.message}`)
+      }
+    }
+  }
+}
 export function SmartDeleteAction(props) {
   const { id, type, onComplete } = props
   
