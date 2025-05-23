@@ -56,7 +56,7 @@ function cleanTitle(title) {
   return title.replace(/\s*unpublished\s*$/i, '').trim()
 }
 
-// MUCH SIMPLER Unpublish Action
+// FIXED Unpublish Action - separate operations
 export function SmartUnpublishAction(props) {
   const { id, type, onComplete } = props
   
@@ -71,12 +71,21 @@ export function SmartUnpublishAction(props) {
         const portfolioHasChildren = await hasChildren(client, id)
         
         if (!portfolioHasChildren) {
-          // No children - just update title and let user manually unpublish
+          // No children - simple unpublish with separate operations
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const newTitle = currentDoc.title.includes('unpublished') 
             ? currentDoc.title 
             : `${currentDoc.title} unpublished`
           
+          // Step 1: Unpublish by unsetting _publishedAt
+          await client.mutate([{
+            patch: {
+              id: id,
+              unset: ['_publishedAt']
+            }
+          }])
+          
+          // Step 2: Update title in separate operation
           await client.mutate([{
             patch: {
               id: id,
@@ -84,7 +93,7 @@ export function SmartUnpublishAction(props) {
             }
           }])
           
-          alert('Title updated with "unpublished" - please manually unpublish using the standard Unpublish button.')
+          console.log('✅ Successfully unpublished:', id)
           onComplete()
           return
         }
@@ -92,15 +101,11 @@ export function SmartUnpublishAction(props) {
         // Has children - show cascade confirmation
         const allChildren = await collectAllChildren(client, id)
         
-        const confirmMessage = `📝 SIMPLE CASCADE UNPUBLISH
+        const confirmMessage = `📝 CASCADE UNPUBLISH
 
-This will append "unpublished" to titles of:
-• 1 portfolio 
-• ${allChildren.artworks.length} artworks
+This will unpublish this portfolio and all its children, and append "unpublished" to their titles.
 
-You'll need to manually unpublish them using Sanity's standard unpublish buttons.
-
-Continue to update titles?`
+Continue?`
         
         const confirmed = window.confirm(confirmMessage)
         if (!confirmed) return
@@ -110,11 +115,13 @@ Continue to update titles?`
           {
             "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
               _id,
-              title
+              title,
+              "isPublished": defined(_publishedAt)
             },
             "artworks": *[_type == "artwork" && _id in $artworkIds] {
               _id,
-              title
+              title,
+              "isPublished": defined(_publishedAt)
             }
           }
         `, { 
@@ -122,43 +129,100 @@ Continue to update titles?`
           artworkIds: allChildren.artworks.map(a => a._id)
         })
         
-        // Simple title updates only
-        const mutations = []
+        console.log(`🚀 Starting cascade unpublish of ${allItems.portfolios.length + allItems.artworks.length} items...`)
         
-        allItems.portfolios.forEach(portfolio => {
+        let processedCount = 0
+        const totalItems = allItems.portfolios.length + allItems.artworks.length
+        
+        // Process portfolios
+        for (const portfolio of allItems.portfolios) {
+          processedCount++
+          
+          // Step 1: Unpublish if published
+          if (portfolio.isPublished) {
+            try {
+              await client.mutate([{
+                patch: {
+                  id: portfolio._id,
+                  unset: ['_publishedAt']
+                }
+              }])
+              console.log(`[${processedCount}/${totalItems}] 📝 Unpublished: ${portfolio.title}`)
+            } catch (error) {
+              console.log(`[${processedCount}/${totalItems}] ❌ Failed to unpublish: ${portfolio.title} - ${error.message}`)
+            }
+          } else {
+            console.log(`[${processedCount}/${totalItems}] 📝 Already unpublished: ${portfolio.title}`)
+          }
+          
+          // Step 2: Update title
           const newTitle = portfolio.title.includes('unpublished') 
             ? portfolio.title 
             : `${portfolio.title} unpublished`
-            
-          mutations.push({
-            patch: {
-              id: portfolio._id,
-              set: { title: newTitle }
+          
+          if (newTitle !== portfolio.title) {
+            try {
+              await client.mutate([{
+                patch: {
+                  id: portfolio._id,
+                  set: { title: newTitle }
+                }
+              }])
+              console.log(`[${processedCount}/${totalItems}] ✏️ Updated title: ${portfolio.title}`)
+            } catch (error) {
+              console.log(`[${processedCount}/${totalItems}] ❌ Failed to update title: ${portfolio.title}`)
             }
-          })
-        })
+          }
+        }
         
-        allItems.artworks.forEach(artwork => {
+        // Process artworks
+        for (const artwork of allItems.artworks) {
+          processedCount++
+          
+          // Step 1: Unpublish if published
+          if (artwork.isPublished) {
+            try {
+              await client.mutate([{
+                patch: {
+                  id: artwork._id,
+                  unset: ['_publishedAt']
+                }
+              }])
+              console.log(`[${processedCount}/${totalItems}] 🎨 Unpublished: ${artwork.title}`)
+            } catch (error) {
+              console.log(`[${processedCount}/${totalItems}] ❌ Failed to unpublish: ${artwork.title} - ${error.message}`)
+            }
+          } else {
+            console.log(`[${processedCount}/${totalItems}] 🎨 Already unpublished: ${artwork.title}`)
+          }
+          
+          // Step 2: Update title
           const newTitle = artwork.title.includes('unpublished') 
             ? artwork.title 
             : `${artwork.title} unpublished`
-            
-          mutations.push({
-            patch: {
-              id: artwork._id,
-              set: { title: newTitle }
+          
+          if (newTitle !== artwork.title) {
+            try {
+              await client.mutate([{
+                patch: {
+                  id: artwork._id,
+                  set: { title: newTitle }
+                }
+              }])
+              console.log(`[${processedCount}/${totalItems}] ✏️ Updated title: ${artwork.title}`)
+            } catch (error) {
+              console.log(`[${processedCount}/${totalItems}] ❌ Failed to update title: ${artwork.title}`)
             }
-          })
-        })
+          }
+        }
         
-        await client.mutate(mutations)
-        
-        alert(`✅ Updated titles for ${mutations.length} items with "unpublished".\n\n🔧 Now manually unpublish them using Sanity's standard Unpublish buttons.\n\n💡 You can search for "unpublished" to find them all.`)
+        console.log(`✅ Cascade unpublish completed! Processed ${processedCount} items.`)
+        alert(`✅ Cascade unpublish completed!\n\nProcessed ${processedCount} items.\n\nCheck the console for detailed results.`)
         onComplete()
         
       } catch (error) {
-        console.error('❌ Title update failed:', error)
-        alert(`Title update failed: ${error.message}`)
+        console.error('❌ Unpublish failed:', error)
+        alert(`Unpublish failed: ${error.message}`)
       }
     }
   }
