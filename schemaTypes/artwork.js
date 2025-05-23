@@ -7,7 +7,7 @@ export default {
       name: 'title',
       title: 'Title',
       type: 'string',
-      validation: Rule => Rule.required()
+      validation: (Rule) => Rule.required(),
     },
     {
       name: 'slug',
@@ -15,16 +15,16 @@ export default {
       type: 'slug',
       options: {
         source: 'title',
-        maxLength: 96
+        maxLength: 96,
       },
-      validation: Rule => Rule.required()
+      validation: (Rule) => Rule.required(),
     },
     {
       name: 'portfolio',
       title: 'Portfolio',
       type: 'reference',
       to: {type: 'portfolio'},
-      validation: Rule => Rule.required()
+      validation: (Rule) => Rule.required(),
     },
     {
       name: 'mediaType',
@@ -33,109 +33,130 @@ export default {
       options: {
         list: [
           {title: 'Image', value: 'image'},
-          {title: 'Video', value: 'video'}
+          {title: 'Video', value: 'video'},
+          {title: 'PDF', value: 'pdf'},
         ],
       },
-      validation: Rule => Rule.required()
+      validation: (Rule) => Rule.required(),
     },
     {
       name: 'image',
       title: 'Image',
       type: 'image',
       options: {
-        hotspot: true
+        hotspot: true,
       },
-      hidden: ({document}) => document?.mediaType !== 'image'
+      hidden: ({document}) => document?.mediaType !== 'image',
     },
     {
       name: 'lowResImage',
       title: 'Low Resolution Image',
       type: 'image',
       options: {
-        hotspot: true
+        hotspot: true,
       },
-      hidden: ({document}) => document?.mediaType !== 'image'
+      hidden: ({document}) => document?.mediaType !== 'image',
     },
     {
       name: 'video',
       title: 'Video File',
       type: 'file',
       options: {
-        accept: 'video/*'
+        accept: 'video/*',
       },
-      hidden: ({document}) => document?.mediaType !== 'video'
+      hidden: ({document}) => document?.mediaType !== 'video',
     },
     {
       name: 'videoThumbnail',
       title: 'Video Thumbnail',
       type: 'image',
       options: {
-        hotspot: true
+        hotspot: true,
       },
-      hidden: ({document}) => document?.mediaType !== 'video'
+      hidden: ({document}) => document?.mediaType !== 'video',
     },
     {
       name: 'videoUrl',
       title: 'External Video URL',
       type: 'url',
       description: 'URL to YouTube, Vimeo, etc. (optional, use this or upload a video file)',
-      hidden: ({document}) => document?.mediaType !== 'video'
+      hidden: ({document}) => document?.mediaType !== 'video',
+    },
+    {
+      name: 'pdfFile',
+      title: 'PDF File',
+      type: 'file',
+      options: {
+        accept: 'application/pdf',
+      },
+      hidden: ({document}) => document?.mediaType !== 'pdf',
+      validation: (Rule) =>
+        Rule.required().custom((value, context) => {
+          if (context.document?.mediaType === 'pdf' && !value) {
+            return 'PDF file is required when media type is PDF'
+          }
+          return true
+        }),
+    },
+    {
+      name: 'pdfThumbnail',
+      title: 'PDF Thumbnail',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      description: 'Optional thumbnail image for PDF preview',
+      hidden: ({document}) => document?.mediaType !== 'pdf',
     },
     {
       name: 'description',
       title: 'Description',
-      type: 'text'
+      type: 'text',
     },
     {
       name: 'year',
       title: 'Year',
-      type: 'string'
+      type: 'string',
     },
     {
       name: 'dimensions',
       title: 'Dimensions',
-      type: 'string'
+      type: 'string',
     },
     {
       name: 'medium',
       title: 'Medium',
-      type: 'string'
+      type: 'string',
     },
     {
       name: 'tags',
       title: 'Tags',
       type: 'array',
-      of: [{type: 'reference', to: {type: 'tag'}}]
+      of: [{type: 'reference', to: {type: 'tag'}}],
     },
     {
       name: 'order',
       title: 'Display Order',
       type: 'number',
-      description: 'Controls the order of artworks within a portfolio (lower numbers appear first)'
-    }
+      description: 'Controls the order of artworks within a portfolio (lower numbers appear first)',
+    },
   ],
   orderings: [
     {
       title: 'Display Order',
       name: 'orderAsc',
-      by: [
-        {field: 'order', direction: 'asc'}
-      ]
+      by: [{field: 'order', direction: 'asc'}],
     },
     {
       title: 'Title',
       name: 'titleAsc',
-      by: [
-        {field: 'title', direction: 'asc'}
-      ]
+      by: [{field: 'title', direction: 'asc'}],
     },
     {
       title: 'Year, New',
       name: 'yearDesc',
-      by: [
-        {field: 'year', direction: 'desc'}
-      ]
-    }
+      by: [{field: 'year', direction: 'desc'}],
+    },
   ],
   preview: {
     select: {
@@ -144,15 +165,30 @@ export default {
       media: 'image',
       lowResMedia: 'lowResImage',
       videoThumbnail: 'videoThumbnail',
-      mediaType: 'mediaType'
+      pdfThumbnail: 'pdfThumbnail',
+      mediaType: 'mediaType',
     },
     prepare(selection) {
-      const {title, portfolio, media, lowResMedia, videoThumbnail, mediaType} = selection
+      const {title, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType} = selection
+      let previewMedia
+      switch (mediaType) {
+        case 'pdf':
+          previewMedia = pdfThumbnail
+          break
+        case 'video':
+          previewMedia = videoThumbnail
+          break
+        case 'image':
+          previewMedia = media || lowResMedia
+          break
+        default:
+          previewMedia = media || lowResMedia
+      }
       return {
         title,
         subtitle: portfolio ? `Portfolio: ${portfolio}` : '',
-        media: mediaType === 'video' ? videoThumbnail : (media || lowResMedia)
+        media: previewMedia
       }
-    }
-  }
+    },
+  },
 }
