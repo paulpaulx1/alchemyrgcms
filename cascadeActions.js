@@ -1,11 +1,12 @@
 // sanity-cms/cascadeActions.js
-import { TrashIcon, EyeClosedIcon } from '@sanity/icons'
-import { useState, useEffect } from 'react'
-import { useDocumentOperation } from 'sanity'
+import {TrashIcon, EyeClosedIcon} from '@sanity/icons'
+import {useState, useEffect} from 'react'
+import {useDocumentOperation} from 'sanity'
 
 // Helper function to check if portfolio has children
 async function hasChildren(client, portfolioId) {
-  const result = await client.fetch(`
+  const result = await client.fetch(
+    `
     {
       "hasChildPortfolios": count(*[_type == "portfolio" && (
         references($portfolioId) || 
@@ -13,14 +14,17 @@ async function hasChildren(client, portfolioId) {
       )]) > 0,
       "hasArtworks": count(*[_type == "artwork" && portfolio._ref == $portfolioId]) > 0
     }
-  `, { portfolioId })
-  
+  `,
+    {portfolioId},
+  )
+
   return result.hasChildPortfolios || result.hasArtworks
 }
 
 // Recursive function to collect all child portfolios
 async function collectAllChildren(client, portfolioId) {
-  const children = await client.fetch(`
+  const children = await client.fetch(
+    `
     {
       "portfolios": *[_type == "portfolio" && (
         references($portfolioId) || 
@@ -36,21 +40,23 @@ async function collectAllChildren(client, portfolioId) {
         _type
       }
     }
-  `, { portfolioId })
-  
+  `,
+    {portfolioId},
+  )
+
   let allPortfolios = [portfolioId]
   let allArtworks = [...children.artworks]
-  
+
   // Recursively collect children
   for (const child of children.portfolios) {
     const childData = await collectAllChildren(client, child._id)
     allPortfolios = [...allPortfolios, ...childData.portfolios]
     allArtworks = [...allArtworks, ...childData.artworks]
   }
-  
+
   return {
     portfolios: [...new Set(allPortfolios)], // Remove duplicates
-    artworks: allArtworks
+    artworks: allArtworks,
   }
 }
 
@@ -59,106 +65,122 @@ function cleanTitle(title) {
   return title.replace(/\s*unpublished\s*$/i, '').trim()
 }
 
+async function unpublishDocument(client, docId) {
+  const draftId = `drafts.${docId}`
+  const publishedDoc = await client.getDocument(docId)
+
+  if (!publishedDoc) {
+    console.log(`⚠️ Document ${docId} is not published.`)
+    return
+  }
+
+  // Create a draft copy if none exists
+  await client
+    .transaction()
+    .createIfNotExists({...publishedDoc, _id: draftId})
+    .delete(docId)
+    .commit()
+
+  console.log(`✅ Unpublished document: ${docId}`)
+}
+
 // TEST Unpublish Action - let's see what operations are available
 export function SmartUnpublishAction(props) {
-  const { id, type, onComplete } = props
-  
-  // Move the hook call to the top level - hooks must be called at component level
-  const operations = useDocumentOperation(props.id, props.type)
-  
+  const {id, type, onComplete} = props
+  const operations = useDocumentOperation(id, type)
+
   return {
-    label: 'Test Unpublish',
+    label: 'Cascade Unpublish',
     icon: EyeClosedIcon,
     tone: 'caution',
     onHandle: async () => {
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-      
-      // Now we can access the operations object
-      console.log('🔍 Available operations:', Object.keys(operations))
-      console.log('🔍 Full operations object:', operations)
-      
-      // Try to destructure common operations
-      const { 
-        patch, 
-        publish, 
-        unpublish, 
-        del, 
-        delete: deleteOp,
-        duplicate,
-        discardChanges,
-        restore
-      } = operations
-      
-      console.log('📝 patch:', patch)
-      console.log('📢 publish:', publish)
-      console.log('📤 unpublish:', unpublish)
-      console.log('🗑️ delete:', deleteOp)
-      console.log('🗑️ del:', del)
-      console.log('📋 duplicate:', duplicate)
-      console.log('↩️ discardChanges:', discardChanges)
-      console.log('🔄 restore:', restore)
-      
-      // If unpublish exists, try to use it
-      if (unpublish) {
-        console.log('✅ Found unpublish operation!')
-        console.log('unpublish.disabled:', unpublish.disabled)
-        
-        const confirmed = window.confirm('Test unpublish operation?')
-        if (confirmed) {
-          try {
-            console.log('🚀 Executing unpublish...')
-            unpublish.execute()
-            console.log('✅ Unpublish executed successfully!')
-            onComplete()
-          } catch (error) {
-            console.error('❌ Unpublish failed:', error)
-            alert(`Unpublish failed: ${error.message}`)
-          }
+      const client = props.getClient({apiVersion: '2023-03-01'})
+
+      try {
+        const allChildren = await collectAllChildren(client, id)
+
+        const confirmMessage = `⚠️ CASCADE UNPUBLISH ⚠️
+  
+  This will unpublish:
+  • ${allChildren.artworks.length} artworks
+  • ${allChildren.portfolios.length - 1} sub-portfolios
+  • 1 main portfolio
+  
+  Continue?`
+
+        const confirmed = window.confirm(confirmMessage)
+        if (!confirmed) return
+
+        // Unpublish artworks first
+        for (const artwork of allChildren.artworks) {
+          await unpublishDocument(client, artwork._id)
         }
-      } else {
-        console.log('❌ No unpublish operation found')
-        alert('No unpublish operation available. Check console for available operations.')
+
+        // Unpublish child portfolios
+        const childPortfolios = allChildren.portfolios.filter((pid) => pid !== id)
+        for (const portfolioId of childPortfolios.reverse()) {
+          await unpublishDocument(client, portfolioId)
+        }
+
+        // Unpublish the main portfolio last
+        if (operations.unpublish) {
+          operations.unpublish.execute()
+          console.log('✅ Unpublished main portfolio')
+        } else {
+          await unpublishDocument(client, id)
+          console.log('✅ Unpublished main portfolio (fallback)')
+        }
+
+        alert('✅ Cascade unpublish complete!')
+        onComplete()
+      } catch (error) {
+        console.error('❌ Cascade unpublish failed:', error)
+        alert(`Cascade unpublish failed: ${error.message}`)
       }
-    }
+    },
   }
 }
 
 // Proper Publish Action
 export function SmartPublishAction(props) {
-  const { id, type, onComplete } = props
-  
+  const {id, type, onComplete} = props
+
   return {
     label: 'Cascade Publish',
     icon: 'publish',
     tone: 'positive',
     onHandle: async () => {
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-      
+      const client = props.getClient({apiVersion: '2023-03-01'})
+
       try {
         const portfolioHasChildren = await hasChildren(client, id)
-        
+
         if (!portfolioHasChildren) {
           // No children - clean title and show message
-          const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
+          const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, {id})
           const cleanedTitle = cleanTitle(currentDoc.title)
-          
+
           if (cleanedTitle !== currentDoc.title) {
-            await client.mutate([{
-              patch: {
-                id: id,
-                set: { title: cleanedTitle }
-              }
-            }])
+            await client.mutate([
+              {
+                patch: {
+                  id: id,
+                  set: {title: cleanedTitle},
+                },
+              },
+            ])
           }
-          
-          alert('✅ Title cleaned.\n\n📢 Now click the standard "Publish" button to actually publish this document.')
+
+          alert(
+            '✅ Title cleaned.\n\n📢 Now click the standard "Publish" button to actually publish this document.',
+          )
           onComplete()
           return
         }
-        
+
         // Has children
         const allChildren = await collectAllChildren(client, id)
-        
+
         const confirmMessage = `📢 CASCADE PUBLISH PREP
 
 This will:
@@ -170,12 +192,13 @@ Items to process:
 • ${allChildren.artworks.length} artworks
 
 Continue?`
-        
+
         const confirmed = window.confirm(confirmMessage)
         if (!confirmed) return
-        
+
         // Get all items
-        const allItems = await client.fetch(`
+        const allItems = await client.fetch(
+          `
           {
             "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
               _id,
@@ -186,46 +209,48 @@ Continue?`
               title
             }
           }
-        `, { 
-          portfolioIds: allChildren.portfolios,
-          artworkIds: allChildren.artworks.map(a => a._id)
-        })
-        
+        `,
+          {
+            portfolioIds: allChildren.portfolios,
+            artworkIds: allChildren.artworks.map((a) => a._id),
+          },
+        )
+
         // Clean titles
         const mutations = []
         const itemsToPublish = []
-        
-        allItems.portfolios.forEach(portfolio => {
+
+        allItems.portfolios.forEach((portfolio) => {
           const cleanedTitle = cleanTitle(portfolio.title)
           if (cleanedTitle !== portfolio.title) {
             mutations.push({
               patch: {
                 id: portfolio._id,
-                set: { title: cleanedTitle }
-              }
+                set: {title: cleanedTitle},
+              },
             })
           }
           itemsToPublish.push(`📁 ${cleanedTitle} (Portfolio)`)
         })
-        
-        allItems.artworks.forEach(artwork => {
+
+        allItems.artworks.forEach((artwork) => {
           const cleanedTitle = cleanTitle(artwork.title)
           if (cleanedTitle !== artwork.title) {
             mutations.push({
               patch: {
                 id: artwork._id,
-                set: { title: cleanedTitle }
-              }
+                set: {title: cleanedTitle},
+              },
             })
           }
           itemsToPublish.push(`🎨 ${cleanedTitle} (Artwork)`)
         })
-        
+
         // Execute title cleaning
         if (mutations.length > 0) {
           await client.mutate(mutations)
         }
-        
+
         const message = `✅ CASCADE TITLE CLEANUP COMPLETED!
 
 Cleaned ${mutations.length} titles (removed "unpublished").
@@ -235,48 +260,49 @@ Cleaned ${mutations.length} titles (removed "unpublished").
 ${itemsToPublish.slice(0, 10).join('\n')}${itemsToPublish.length > 10 ? `\n... and ${itemsToPublish.length - 10} more` : ''}
 
 💡 TIP: Use the standard Publish button on each item to publish them.`
-        
+
         alert(message)
         console.log('📋 Items to manually publish:', itemsToPublish)
         onComplete()
-        
       } catch (error) {
         console.error('❌ Cascade operation failed:', error)
         alert(`Operation failed: ${error.message}`)
       }
-    }
+    },
   }
 }
 
 // Simple Delete Action (this one can work automatically)
 export function SmartDeleteAction(props) {
-  const { id, type, onComplete } = props
-  
+  const {id, type, onComplete} = props
+
   return {
     label: 'Cascade Delete',
     icon: TrashIcon,
     tone: 'critical',
     onHandle: async () => {
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-      
+      const client = props.getClient({apiVersion: '2023-03-01'})
+
       try {
         const portfolioHasChildren = await hasChildren(client, id)
-        
+
         if (!portfolioHasChildren) {
           // No children - normal delete
           const confirmed = window.confirm('Delete this portfolio permanently?')
           if (confirmed) {
-            await client.mutate([{
-              delete: { id: id }
-            }])
+            await client.mutate([
+              {
+                delete: {id: id},
+              },
+            ])
             onComplete()
           }
           return
         }
-        
+
         // Has children
         const allChildren = await collectAllChildren(client, id)
-        
+
         const confirmMessage = `⚠️ CASCADE DELETE WARNING ⚠️
 
 This will permanently delete:
@@ -286,35 +312,34 @@ This will permanently delete:
 ⚠️ This CANNOT be undone!
 
 Type "DELETE" to confirm:`
-        
+
         const userInput = prompt(confirmMessage)
         if (userInput !== 'DELETE') {
           alert('Delete cancelled.')
           return
         }
-        
+
         // Execute cascade delete
         const mutations = []
-        
+
         // Delete artworks first
-        allChildren.artworks.forEach(artwork => {
-          mutations.push({ delete: { id: artwork._id } })
+        allChildren.artworks.forEach((artwork) => {
+          mutations.push({delete: {id: artwork._id}})
         })
-        
+
         // Delete portfolios last (children first)
-        allChildren.portfolios.reverse().forEach(portfolioId => {
-          mutations.push({ delete: { id: portfolioId } })
+        allChildren.portfolios.reverse().forEach((portfolioId) => {
+          mutations.push({delete: {id: portfolioId}})
         })
-        
+
         await client.mutate(mutations)
-        
+
         console.log(`✅ Cascade delete completed: ${mutations.length} items deleted`)
         onComplete()
-        
       } catch (error) {
         console.error('❌ Delete failed:', error)
         alert(`Delete failed: ${error.message}`)
       }
-    }
+    },
   }
 }
