@@ -189,7 +189,7 @@ Continue?`
   }
 }
 
-// Smart Unpublish Action - now appends "unpublished" to titles
+// Smart Unpublish Action - with progress UI
 export function SmartUnpublishAction(props) {
   const { id, type, onComplete } = props
   
@@ -204,7 +204,7 @@ export function SmartUnpublishAction(props) {
         const portfolioHasChildren = await hasChildren(client, id)
         
         if (!portfolioHasChildren) {
-          // No children - try different approach for unpublishing
+          // No children - simple unpublish
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const newTitle = currentDoc.title.includes('unpublished') 
             ? currentDoc.title 
@@ -218,8 +218,16 @@ export function SmartUnpublishAction(props) {
             }
           }])
           
-          // Then try to unpublish by deleting the published version
-          await client.delete(`${id.replace('drafts.', '')}`)
+          // Then unpublish by deleting the published version (if it exists)
+          const publishedId = id.replace('drafts.', '')
+          if (publishedId !== id) {
+            try {
+              await client.delete(publishedId)
+              console.log('Successfully unpublished:', publishedId)
+            } catch (error) {
+              console.log('Document may already be unpublished:', error.message)
+            }
+          }
           
           onComplete()
           return
@@ -230,23 +238,25 @@ export function SmartUnpublishAction(props) {
         
         const confirmMessage = `📝 CASCADE UNPUBLISH
 
-This will unpublish this portfolio and all its children, and append "unpublished" to their titles for easier searching.
+This will unpublish this portfolio and all its children, and append "unpublished" to their titles.
 
 Continue?`
         
         const confirmed = window.confirm(confirmMessage)
         if (!confirmed) return
         
-        // Get current titles for all items
+        // Get current titles and published status for all items
         const currentTitles = await client.fetch(`
           {
             "portfolios": *[_type == "portfolio" && _id in $portfolioIds] {
               _id,
-              title
+              title,
+              "isPublished": defined(_publishedAt)
             },
             "artworks": *[_type == "artwork" && _id in $artworkIds] {
               _id,
-              title
+              title,
+              "isPublished": defined(_publishedAt)
             }
           }
         `, { 
@@ -254,68 +264,87 @@ Continue?`
           artworkIds: allChildren.artworks.map(a => a._id)
         })
         
-        // First update all titles
-        const titleMutations = []
+        // Create progress display
+        const totalItems = currentTitles.portfolios.length + currentTitles.artworks.length
+        let processedCount = 0
         
-        currentTitles.portfolios.forEach(portfolio => {
+        // Helper function to update progress
+        const updateProgress = (itemName, action) => {
+          processedCount++
+          console.log(`[${processedCount}/${totalItems}] ${action}: ${itemName}`)
+        }
+        
+        console.log(`🚀 Starting cascade unpublish of ${totalItems} items...`)
+        console.log(`📁 Portfolios: ${currentTitles.portfolios.length}`)
+        console.log(`🎨 Artworks: ${currentTitles.artworks.length}`)
+        console.log('---')
+        
+        // Process portfolios
+        for (const portfolio of currentTitles.portfolios) {
           const newTitle = portfolio.title.includes('unpublished') 
             ? portfolio.title 
             : `${portfolio.title} unpublished`
-            
-          titleMutations.push({
+          
+          // Update title
+          await client.mutate([{
             patch: {
               id: portfolio._id,
               set: { title: newTitle }
             }
-          })
-        })
+          }])
+          updateProgress(portfolio.title, '✏️ Updated title')
+          
+          // Unpublish if published
+          if (portfolio.isPublished) {
+            const publishedId = portfolio._id.replace('drafts.', '')
+            if (publishedId !== portfolio._id) {
+              try {
+                await client.delete(publishedId)
+                updateProgress(portfolio.title, '📝 Unpublished')
+              } catch (error) {
+                updateProgress(portfolio.title, '⚠️ Already unpublished')
+              }
+            }
+          } else {
+            updateProgress(portfolio.title, '📝 Already unpublished')
+          }
+        }
         
-        currentTitles.artworks.forEach(artwork => {
+        // Process artworks
+        for (const artwork of currentTitles.artworks) {
           const newTitle = artwork.title.includes('unpublished') 
             ? artwork.title 
             : `${artwork.title} unpublished`
-            
-          titleMutations.push({
+          
+          // Update title
+          await client.mutate([{
             patch: {
               id: artwork._id,
               set: { title: newTitle }
             }
-          })
-        })
-        
-        // Update titles first
-        await client.mutate(titleMutations)
-        
-        // Then delete published versions to unpublish
-        const deleteMutations = []
-        
-        allChildren.portfolios.forEach(portfolioId => {
-          const publishedId = portfolioId.replace('drafts.', '')
-          if (publishedId !== portfolioId) {
-            deleteMutations.push({
-              delete: {
-                id: publishedId
+          }])
+          updateProgress(artwork.title, '✏️ Updated title')
+          
+          // Unpublish if published
+          if (artwork.isPublished) {
+            const publishedId = artwork._id.replace('drafts.', '')
+            if (publishedId !== artwork._id) {
+              try {
+                await client.delete(publishedId)
+                updateProgress(artwork.title, '🎨 Unpublished')
+              } catch (error) {
+                updateProgress(artwork.title, '⚠️ Already unpublished')
               }
-            })
+            }
+          } else {
+            updateProgress(artwork.title, '🎨 Already unpublished')
           }
-        })
-        
-        allChildren.artworks.forEach(artwork => {
-          const publishedId = artwork._id.replace('drafts.', '')
-          if (publishedId !== artwork._id) {
-            deleteMutations.push({
-              delete: {
-                id: publishedId
-              }
-            })
-          }
-        })
-        
-        if (deleteMutations.length > 0) {
-          await client.mutate(deleteMutations)
         }
         
-        console.log(`✅ Cascade unpublish completed with title updates`)
+        console.log('---')
+        console.log(`✅ Cascade unpublish completed! Processed ${processedCount} items.`)
+        alert(`✅ Cascade unpublish completed!\n\nProcessed ${processedCount} items:\n• ${currentTitles.portfolios.length} portfolios\n• ${currentTitles.artworks.length} artworks\n\nCheck the console for detailed progress.`)
+        
         onComplete()
         
       } catch (error) {
