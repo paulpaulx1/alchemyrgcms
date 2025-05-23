@@ -63,6 +63,9 @@ function cleanTitle(title) {
 export function SmartUnpublishAction(props) {
   const { id, type, onComplete } = props
   
+  // Move the hook call to the top level - hooks must be called at component level
+  const operations = useDocumentOperation(props.id, props.type)
+  
   return {
     label: 'Test Unpublish',
     icon: EyeClosedIcon,
@@ -70,8 +73,7 @@ export function SmartUnpublishAction(props) {
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
       
-      // Let's see what operations useDocumentOperation actually provides
-      const operations = useDocumentOperation(props.id, props.type)
+      // Now we can access the operations object
       console.log('🔍 Available operations:', Object.keys(operations))
       console.log('🔍 Full operations object:', operations)
       
