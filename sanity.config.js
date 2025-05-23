@@ -5,7 +5,7 @@ import {schemaTypes} from './schemaTypes'
 import {colorInput} from '@sanity/color-input'
 
 // Import the smart cascade actions
-import { createSmartDeleteAction, createSmartUnpublishAction } from './cascadeActions'
+import { smartDeleteAction, smartUnpublishAction } from './cascadeActions'
 
 console.log(process.env);
 export default defineConfig({
@@ -26,18 +26,13 @@ export default defineConfig({
     actions: (prev, context) => {
       // Only modify actions for portfolio documents
       if (context.schemaType === 'portfolio') {
-        return prev.map(action => {
-          // Replace the default delete action with smart delete
-          if (action.action === 'delete') {
-            return createSmartDeleteAction(action)
-          }
-          // Replace the default unpublish action with smart unpublish
-          if (action.action === 'unpublish') {
-            return createSmartUnpublishAction(action)
-          }
-          // Keep all other actions as-is
-          return action
-        })
+        return [
+          // Keep all original actions except delete and unpublish
+          ...prev.filter(action => action.action !== 'delete' && action.action !== 'unpublish'),
+          // Add our smart actions
+          smartDeleteAction,
+          smartUnpublishAction
+        ]
       }
       
       // For all other document types, keep original actions
