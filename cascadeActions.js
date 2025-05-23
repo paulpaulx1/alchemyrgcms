@@ -204,20 +204,23 @@ export function SmartUnpublishAction(props) {
         const portfolioHasChildren = await hasChildren(client, id)
         
         if (!portfolioHasChildren) {
-          // No children - normal unpublish with title update using mutate API
+          // No children - try different approach for unpublishing
           const currentDoc = await client.fetch(`*[_id == $id][0]{ title }`, { id })
           const newTitle = currentDoc.title.includes('unpublished') 
             ? currentDoc.title 
             : `${currentDoc.title} unpublished`
-            
-          // Use mutate API directly
+          
+          // First update the title
           await client.mutate([{
             patch: {
               id: id,
-              unset: ['_publishedAt'],
               set: { title: newTitle }
             }
           }])
+          
+          // Then try to unpublish by deleting the published version
+          await client.delete(`${id.replace('drafts.', '')}`)
+          
           onComplete()
           return
         }
@@ -251,41 +254,66 @@ Continue?`
           artworkIds: allChildren.artworks.map(a => a._id)
         })
         
-        // Create mutations array
-        const mutations = []
+        // First update all titles
+        const titleMutations = []
         
-        // Create mutation objects for portfolios
         currentTitles.portfolios.forEach(portfolio => {
           const newTitle = portfolio.title.includes('unpublished') 
             ? portfolio.title 
             : `${portfolio.title} unpublished`
             
-          mutations.push({
+          titleMutations.push({
             patch: {
               id: portfolio._id,
-              unset: ['_publishedAt'],
               set: { title: newTitle }
             }
           })
         })
         
-        // Create mutation objects for artworks
         currentTitles.artworks.forEach(artwork => {
           const newTitle = artwork.title.includes('unpublished') 
             ? artwork.title 
             : `${artwork.title} unpublished`
             
-          mutations.push({
+          titleMutations.push({
             patch: {
               id: artwork._id,
-              unset: ['_publishedAt'],
               set: { title: newTitle }
             }
           })
         })
         
-        // Execute all mutations at once
-        await client.mutate(mutations)
+        // Update titles first
+        await client.mutate(titleMutations)
+        
+        // Then delete published versions to unpublish
+        const deleteMutations = []
+        
+        allChildren.portfolios.forEach(portfolioId => {
+          const publishedId = portfolioId.replace('drafts.', '')
+          if (publishedId !== portfolioId) {
+            deleteMutations.push({
+              delete: {
+                id: publishedId
+              }
+            })
+          }
+        })
+        
+        allChildren.artworks.forEach(artwork => {
+          const publishedId = artwork._id.replace('drafts.', '')
+          if (publishedId !== artwork._id) {
+            deleteMutations.push({
+              delete: {
+                id: publishedId
+              }
+            })
+          }
+        })
+        
+        if (deleteMutations.length > 0) {
+          await client.mutate(deleteMutations)
+        }
         
         console.log(`✅ Cascade unpublish completed with title updates`)
         onComplete()
