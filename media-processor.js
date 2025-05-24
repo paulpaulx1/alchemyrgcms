@@ -8,11 +8,11 @@ const slugify = require('slugify');
 const sanityClient = require('@sanity/client');
 require('dotenv').config();
 
-
+const os = require('os');
 // Configuration
 const CONFIG = {
   // Paths
-  rootDir: path.join(__dirname, 'media'), // Root directory to scan
+  rootDir: path.join(os.homedir(), 'Desktop', 'Fear Backup'), // Root directory to scan
   outputDir: path.join(__dirname, 'processed'), // Directory for processed files
   credentialsPath: path.join(__dirname, 'client_secret.json'), // Google API credentials
   
@@ -257,7 +257,6 @@ async function processDirectory(dirPath, parentPath = '', parentPortfolioId = nu
   }
   
   // Handle video uploads and Sanity creation for this directory
-  if (parentPath) { // Skip for root directory
     // Process images in Sanity
     for (const image of processedImages) {
       // Upload images to Sanity
@@ -299,7 +298,7 @@ async function processDirectory(dirPath, parentPath = '', parentPortfolioId = nu
         console.log(`Created artwork document: ${image.title}`);
       }
     }
-  }
+  
   
   return {
     portfolioId,

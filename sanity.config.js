@@ -1,46 +1,32 @@
-import {defineConfig} from 'sanity'
-import {structureTool} from 'sanity/structure'
-import {visionTool} from '@sanity/vision'
-import {schemaTypes} from './schemaTypes'
-import {colorInput} from '@sanity/color-input'
+// sanity.config.js
+import { defineConfig } from 'sanity'
+import { structureTool } from 'sanity/structure'
+import { visionTool } from '@sanity/vision'
+import { colorInput } from '@sanity/color-input'
+import { schemaTypes } from './schemaTypes'
+import {
+  SmartMarkUnpublishAction,
+  SmartClearUnpublishAction,
+  SmartDeleteAction
+} from './cascadeActions'
 
-// Import the smart cascade actions
-import { SmartDeleteAction, SmartUnpublishAction, SmartPublishAction } from './cascadeActions'
-
-console.log(process.env);
 export default defineConfig({
-  name: 'default',
-  title: 'AlchemyRG',
-  projectId: '5lwtjnp5', 
+  name:    'default',
+  title:   'AlchemyRG',
+  projectId: '5lwtjnp5',
   dataset: 'production',
-  token: process.env.SANITY_TOKEN,
-
   plugins: [structureTool(), visionTool(), colorInput()],
-
-  schema: {
-    types: schemaTypes,
-  },
-
-  // Add document actions configuration
+  schema: { types: schemaTypes },
   document: {
-    actions: (prev, context) => {
-      // Only modify actions for portfolio documents
-      if (context.schemaType === 'portfolio') {
+    actions: (prev, { schemaType, getClient }) => {
+      if (schemaType === 'portfolio') {
         return [
-          // Keep all original actions except delete, unpublish, and publish
-          ...prev.filter(action => 
-            action.action !== 'delete' && 
-            action.action !== 'unpublish' && 
-            action.action !== 'publish'
-          ),
-          // Add our smart actions with context passed
-          (props) => SmartPublishAction({...props, getClient: context.getClient}),
-          (props) => SmartUnpublishAction({...props, getClient: context.getClient}),
-          (props) => SmartDeleteAction({...props, getClient: context.getClient})
+          ...prev,
+          props => SmartMarkUnpublishAction({ ...props, getClient }),
+          props => SmartClearUnpublishAction({ ...props, getClient }),
+          props => SmartDeleteAction({   ...props, getClient })
         ]
       }
-      
-      // For all other document types, keep original actions
       return prev
     }
   }
