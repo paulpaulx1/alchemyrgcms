@@ -4,20 +4,20 @@ export default {
   type: 'document',
   fields: [
     {
-      name: 'hasTitle',
-      title: 'Has Title',
+      name: 'displayTitle',
+      title: 'Display Title?',
       type: 'boolean',
       initialValue: true,
-      description: 'Toggle off for artworks without titles (multiple photos of same piece, etc.)'
+      description: 'Toggle off to hide title on frontend (for multiple photos of same piece, etc.)'
     },
     {
       name: 'title',
       title: 'Title',
       type: 'string',
-      hidden: ({document}) => !document?.hasTitle,
+      hidden: ({document}) => !document?.displayTitle,
       validation: (Rule) => Rule.custom((value, context) => {
-        if (context.document?.hasTitle && !value) {
-          return 'Title is required when "Has Title" is enabled'
+        if (context.document?.displayTitle && !value) {
+          return 'Title is required when "Display Title?" is enabled'
         }
         return true
       }),
@@ -28,8 +28,8 @@ export default {
       type: 'slug',
       options: {
         source: (doc) => {
-          if (!doc.hasTitle) {
-            // Generate unique slug for untitled pieces
+          if (!doc.displayTitle) {
+            // Generate unique slug for pieces without displayed titles
             return `no-title-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
           }
           return doc.title
@@ -190,7 +190,7 @@ export default {
   preview: {
     select: {
       title: 'title',
-      hasTitle: 'hasTitle',
+      hasTitle: 'displayTitle',
       portfolio: 'portfolio.title',
       media: 'image',
       lowResMedia: 'lowResImage',
