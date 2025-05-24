@@ -4,18 +4,47 @@ export default {
   type: 'document',
   fields: [
     {
+      name: 'hasTitle',
+      title: 'Has Title',
+      type: 'boolean',
+      initialValue: true,
+      description: 'Toggle off for artworks without titles (multiple photos of same piece, etc.)'
+    },
+    {
       name: 'title',
       title: 'Title',
       type: 'string',
-      validation: (Rule) => Rule.required(),
+      hidden: ({document}) => !document?.hasTitle,
+      validation: (Rule) => Rule.custom((value, context) => {
+        if (context.document?.hasTitle && !value) {
+          return 'Title is required when "Has Title" is enabled'
+        }
+        return true
+      }),
     },
     {
       name: 'slug',
       title: 'Slug',
       type: 'slug',
       options: {
-        source: 'title',
+        source: (doc) => {
+          if (!doc.hasTitle) {
+            // Generate unique slug for untitled pieces
+            return `no-title-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          }
+          return doc.title
+        },
         maxLength: 96,
+        slugify: input => {
+          if (input.startsWith('no-title-')) {
+            return input // Don't modify auto-generated slugs
+          }
+          return input
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^\w\-]+/g, '')
+            .slice(0, 96)
+        }
       },
       validation: (Rule) => Rule.required(),
     },
@@ -161,6 +190,7 @@ export default {
   preview: {
     select: {
       title: 'title',
+      hasTitle: 'hasTitle',
       portfolio: 'portfolio.title',
       media: 'image',
       lowResMedia: 'lowResImage',
@@ -169,7 +199,7 @@ export default {
       mediaType: 'mediaType',
     },
     prepare(selection) {
-      const {title, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType} = selection
+      const {title, hasTitle, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType} = selection
       let previewMedia
       switch (mediaType) {
         case 'pdf':
@@ -185,7 +215,7 @@ export default {
           previewMedia = media || lowResMedia
       }
       return {
-        title,
+        title: hasTitle ? title : '(No Title)',
         subtitle: portfolio ? `Portfolio: ${portfolio}` : '',
         media: previewMedia
       }
