@@ -120,7 +120,7 @@ export default {
       },
       hidden: ({document}) => document?.mediaType !== 'pdf',
       validation: (Rule) =>
-        Rule.required().custom((value, context) => {
+        Rule.custom((value, context) => {
           if (context.document?.mediaType === 'pdf' && !value) {
             return 'PDF file is required when media type is PDF'
           }
