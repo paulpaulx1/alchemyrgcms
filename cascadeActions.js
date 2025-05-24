@@ -1,6 +1,6 @@
+/* global window */
 // sanity-cms/cascadeActions.js
 import { TrashIcon, EyeClosedIcon, EyeOpenIcon } from '@sanity/icons'
-import { useDocumentOperation } from 'sanity'
 
 async function hasChildren(client, portfolioId) {
   const { hasChildPortfolios, hasArtworks } = await client.fetch(
@@ -56,7 +56,7 @@ async function clearUnpublished(client, docId) {
 }
 
 export function SmartMarkUnpublishAction(props) {
-  const { id, onComplete, type } = props
+  const { id, onComplete } = props
   return {
     label: 'Cascade Mark Unpublish',
     icon:  EyeClosedIcon,
@@ -102,7 +102,7 @@ export function SmartClearUnpublishAction(props) {
 }
 
 export function SmartDeleteAction(props) {
-  const { id, onComplete, type } = props
+  const { id, onComplete } = props
   return {
     label: 'Cascade Delete',
     icon:  TrashIcon,
@@ -117,7 +117,7 @@ export function SmartDeleteAction(props) {
         return
       }
       const { portfolios, artworks } = await collectAllChildren(client, id)
-      const input = prompt(
+      const input = window.prompt(
         `⚠️ CASCADE DELETE ⚠️\nThis will delete:\n• 1 portfolio\n• ${artworks.length} artworks\nType "DELETE" to confirm:`
       )
       if (input !== 'DELETE') return
