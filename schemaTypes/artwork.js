@@ -190,16 +190,17 @@ export default {
   preview: {
     select: {
       title: 'title',
-      hasTitle: 'displayTitle',
+      displayTitle: 'displayTitle',
       portfolio: 'portfolio.title',
       media: 'image',
       lowResMedia: 'lowResImage',
       videoThumbnail: 'videoThumbnail',
       pdfThumbnail: 'pdfThumbnail',
       mediaType: 'mediaType',
+      slug: 'slug.current'
     },
     prepare(selection) {
-      const {title, hasTitle, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType} = selection
+      const {title, displayTitle, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType, slug} = selection
       let previewMedia
       switch (mediaType) {
         case 'pdf':
@@ -214,8 +215,17 @@ export default {
         default:
           previewMedia = media || lowResMedia
       }
+      
+      // Show title with indicator if not displayed
+      let displayName
+      if (title) {
+        displayName = displayTitle ? title : `${title} - untitled`
+      } else {
+        displayName = `(${slug})`
+      }
+      
       return {
-        title: hasTitle ? title : '(No Title)',
+        title: displayName,
         subtitle: portfolio ? `Portfolio: ${portfolio}` : '',
         media: previewMedia
       }
