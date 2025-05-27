@@ -28,6 +28,27 @@ export default {
         }
       },
       {
+        name: 'additionalImages', // New field
+        title: 'Additional Images',
+        type: 'array',
+        of: [
+          {
+            type: 'image',
+            options: {
+              hotspot: true
+            },
+            fields: [
+              {
+                name: 'alt',
+                title: 'Alt Text',
+                type: 'string'
+              }
+            ]
+          }
+        ],
+        validation: Rule => Rule.max(9) // Max 9 additional + 1 main = 10 total
+      },
+      {
         name: 'bio',
         title: 'Biography',
         type: 'array',
