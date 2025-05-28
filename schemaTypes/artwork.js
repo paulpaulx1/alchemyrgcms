@@ -195,14 +195,14 @@ export default {
       name: 'order',
       title: 'Display Order',
       type: 'number',
-      description: 'Controls the order of artworks within a portfolio (lower numbers appear first)',
+      description: 'Controls the order of artworks within a portfolio (higher numbers appear first)',
     },
   ],
   orderings: [
     {
       title: 'Display Order',
-      name: 'orderAsc',
-      by: [{field: 'order', direction: 'asc'}],
+      name: 'orderDesc',
+      by: [{field: 'order', direction: 'desc'}],
     },
     {
       title: 'Title',
