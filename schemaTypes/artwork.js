@@ -8,19 +8,20 @@ export default {
       title: 'Display Title?',
       type: 'boolean',
       initialValue: true,
-      description: 'Toggle off to hide title on frontend (for multiple photos of same piece, etc.)'
+      description: 'Toggle off to hide title on frontend (for multiple photos of same piece, etc.)',
     },
     {
       name: 'title',
       title: 'Title',
       type: 'string',
       hidden: ({document}) => !document?.displayTitle,
-      validation: (Rule) => Rule.custom((value, context) => {
-        if (context.document?.displayTitle && !value) {
-          return 'Title is required when "Display Title?" is enabled'
-        }
-        return true
-      }),
+      validation: (Rule) =>
+        Rule.custom((value, context) => {
+          if (context.document?.displayTitle && !value) {
+            return 'Title is required when "Display Title?" is enabled'
+          }
+          return true
+        }),
     },
     {
       name: 'slug',
@@ -35,7 +36,7 @@ export default {
           return doc.title
         },
         maxLength: 96,
-        slugify: input => {
+        slugify: (input) => {
           if (input.startsWith('no-title-')) {
             return input // Don't modify auto-generated slugs
           }
@@ -44,7 +45,7 @@ export default {
             .replace(/\s+/g, '-')
             .replace(/[^\w\-]+/g, '')
             .slice(0, 96)
-        }
+        },
       },
       validation: (Rule) => Rule.required(),
     },
@@ -64,6 +65,7 @@ export default {
           {title: 'Image', value: 'image'},
           {title: 'Video', value: 'video'},
           {title: 'PDF', value: 'pdf'},
+          {title: 'Audio', value: 'audio'},
         ],
       },
       validation: (Rule) => Rule.required(),
@@ -138,6 +140,32 @@ export default {
       hidden: ({document}) => document?.mediaType !== 'pdf',
     },
     {
+      name: 'audioFile',
+      title: 'Audio File',
+      type: 'file',
+      options: {
+        accept: 'audio/*',
+      },
+      hidden: ({document}) => document?.mediaType !== 'audio',
+      validation: (Rule) =>
+        Rule.custom((value, context) => {
+          if (context.document?.mediaType === 'audio' && !value) {
+            return 'Audio file is required when media type is Audio'
+          }
+          return true
+        }),
+    },
+    {
+      name: 'audioThumbnail',
+      title: 'Audio Thumbnail',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      description: 'Optional thumbnail image for audio preview',
+      hidden: ({document}) => document?.mediaType !== 'audio',
+    },
+    {
       name: 'description',
       title: 'Description',
       type: 'text',
@@ -196,13 +224,28 @@ export default {
       lowResMedia: 'lowResImage',
       videoThumbnail: 'videoThumbnail',
       pdfThumbnail: 'pdfThumbnail',
+      audioThumbnail: 'audioThumbnail',
       mediaType: 'mediaType',
-      slug: 'slug.current'
+      slug: 'slug.current',
     },
     prepare(selection) {
-      const {title, displayTitle, portfolio, media, lowResMedia, videoThumbnail, pdfThumbnail, mediaType, slug} = selection
+      const {
+        title,
+        displayTitle,
+        portfolio,
+        media,
+        lowResMedia,
+        videoThumbnail,
+        pdfThumbnail,
+        audioThumbnail,
+        mediaType,
+        slug,
+      } = selection
       let previewMedia
       switch (mediaType) {
+        case 'audio':
+          previewMedia = audioThumbnail
+          break
         case 'pdf':
           previewMedia = pdfThumbnail
           break
@@ -215,7 +258,7 @@ export default {
         default:
           previewMedia = media || lowResMedia
       }
-      
+
       // Show title with indicator if not displayed
       let displayName
       if (title) {
@@ -223,11 +266,11 @@ export default {
       } else {
         displayName = `(${slug})`
       }
-      
+
       return {
         title: displayName,
         subtitle: portfolio ? `Portfolio: ${portfolio}` : '',
-        media: previewMedia
+        media: previewMedia,
       }
     },
   },
