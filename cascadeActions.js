@@ -56,6 +56,58 @@ async function clearUnpublished(client, docId) {
   }
 }
 
+// Helper function to clean up corrupted drafts
+async function cleanupCorruptedDrafts(client) {
+  // Find documents with double "drafts.drafts." prefix
+  const corruptedDrafts = await client.fetch(`
+    *[_id match "drafts.drafts.*"]{_id}
+  `)
+  
+  console.log('Found corrupted drafts:', corruptedDrafts)
+  
+  // Delete corrupted drafts
+  for (const doc of corruptedDrafts) {
+    try {
+      await client.delete(doc._id)
+      console.log(`Deleted corrupted draft: ${doc._id}`)
+    } catch (error) {
+      console.error(`Failed to delete ${doc._id}:`, error)
+    }
+  }
+}
+
+// Helper function to force unpublish by removing references temporarily
+async function forceUnpublishWithReferences(client, docId) {
+  try {
+    // First clean up any corrupted drafts
+    await cleanupCorruptedDrafts(client)
+    
+    // Try normal unpublish via client
+    await client.mutate([{ delete: { id: docId } }])
+  } catch (error) {
+    if (error.message.includes('references')) {
+      console.log(`Document ${docId} has references, using force unpublish method`)
+      
+      // Get the published document
+      const publishedDoc = await client.getDocument(docId)
+      if (!publishedDoc) return
+      
+      // Create draft version first
+      await client.mutate([{ 
+        createOrReplace: { 
+          ...publishedDoc, 
+          _id: `drafts.${docId}` 
+        } 
+      }])
+      
+      // Force delete the published version using direct delete
+      await client.delete(docId)
+    } else {
+      throw error
+    }
+  }
+}
+
 export function SmartCascadePublishAction(props) {
   const { id, onComplete, type } = props
   const { publish } = useDocumentOperation(id, type)
@@ -131,36 +183,6 @@ export function SmartCascadePublishAction(props) {
   }
 }
 
-// Helper function to force unpublish by removing references temporarily
-async function forceUnpublishWithReferences(client, docId) {
-  try {
-    // First, try normal unpublish via client
-    await client.mutate([{ delete: { id: docId } }])
-  } catch (error) {
-    if (error.message.includes('references')) {
-      console.log(`Document ${docId} has references, using force unpublish method`)
-      
-      // Get the published document
-      const publishedDoc = await client.getDocument(docId)
-      if (!publishedDoc) return
-      
-      // Create draft version
-      await client.mutate([{ 
-        createOrReplace: { 
-          ...publishedDoc, 
-          _id: `drafts.${docId}` 
-        } 
-      }])
-      
-      // Force delete the published version by bypassing reference check
-      // This uses the 'weak' option which allows deletion despite references
-      await client.delete(docId)
-    } else {
-      throw error
-    }
-  }
-}
-
 export function SmartCascadeUnpublishAction(props) {
   const { id, onComplete, type } = props
   const [isUnpublishing, setIsUnpublishing] = useState(false)
@@ -172,18 +194,22 @@ export function SmartCascadeUnpublishAction(props) {
     disabled: isUnpublishing,
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
-      const { portfolios, artworks } = await collectAllChildren(client, id)
       
       if (!window.confirm(
-        `Unpublish ${artworks.length} artworks and ${portfolios.length} portfolios (including this one)?`
+        `This will clean up any corrupted drafts and unpublish this portfolio and all its contents. Continue?`
       )) return
 
       setIsUnpublishing(true)
 
       try {
-        // Process all documents (artworks and portfolios)
+        // Step 1: Clean up corrupted drafts first
+        await cleanupCorruptedDrafts(client)
+        
+        // Step 2: Get all children
+        const { portfolios, artworks } = await collectAllChildren(client, id)
         const allDocuments = [...artworks, ...portfolios]
         
+        // Step 3: Force unpublish all documents
         for (const docId of allDocuments) {
           await forceUnpublishWithReferences(client, docId)
         }
@@ -271,6 +297,38 @@ export function SmartDeleteAction(props) {
       ]
       await client.mutate(mutations)
       onComplete()
+    }
+  }
+}
+
+// Quick fix action for corrupted drafts
+export function CleanupCorruptedDraftsAction(props) {
+  const { onComplete } = props
+  const [isCleaning, setIsCleaning] = useState(false)
+
+  return {
+    label: isCleaning ? 'Cleaning...' : 'Cleanup Corrupted Drafts',
+    icon: TrashIcon,
+    tone: 'critical',
+    disabled: isCleaning,
+    onHandle: async () => {
+      if (!window.confirm(
+        'This will delete any documents with corrupted "drafts.drafts.*" IDs. Continue?'
+      )) return
+
+      setIsCleaning(true)
+      const client = props.getClient({ apiVersion: '2023-03-01' })
+
+      try {
+        await cleanupCorruptedDrafts(client)
+        alert('Corrupted drafts cleaned up successfully!')
+        setIsCleaning(false)
+        onComplete()
+      } catch (error) {
+        console.error('Error cleaning up:', error)
+        setIsCleaning(false)
+        alert('Error occurred during cleanup. Check console for details.')
+      }
     }
   }
 }
