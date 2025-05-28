@@ -1,6 +1,5 @@
 // sanity-cms/cascadeActions.js
-import { TrashIcon, EyeClosedIcon, EyeOpenIcon } from '@sanity/icons'
-import { useDocumentOperation } from 'sanity'
+import { TrashIcon } from '@sanity/icons'
 
 async function hasChildren(client, portfolioId) {
   const { hasChildPortfolios, hasArtworks } = await client.fetch(
@@ -34,73 +33,6 @@ async function collectAllChildren(client, portfolioId) {
   }
 }
 
-function cleanTitle(title) {
-  return title.replace(/\s*unpublished\s*$/i, '').trim()
-}
-
-async function markUnpublished(client, docId) {
-  const doc = await client.getDocument(docId)
-  if (!doc) return
-  const base    = cleanTitle(doc.title || '')
-  const updated = `${base} unpublished`
-  await client.patch(docId).set({ title: updated }).commit()
-}
-
-async function clearUnpublished(client, docId) {
-  const doc = await client.getDocument(docId)
-  if (!doc) return
-  const cleaned = cleanTitle(doc.title || '')
-  if (cleaned !== doc.title) {
-    await client.patch(docId).set({ title: cleaned }).commit()
-  }
-}
-
-export function SmartMarkUnpublishAction(props) {
-  const { id, onComplete, type } = props
-  return {
-    label: 'Cascade Mark Unpublish',
-    icon:  EyeClosedIcon,
-    tone:  'caution',
-    onHandle: async () => {
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-      const { portfolios, artworks } = await collectAllChildren(client, id)
-      if (!window.confirm(
-        `Mark ${artworks.length} artworks and ${portfolios.length - 1} sub-portfolios as "unpublished"?`
-      )) return
-      for (const pid of portfolios) {
-        await markUnpublished(client, pid)
-      }
-      for (const aid of artworks) {
-        await markUnpublished(client, aid)
-      }
-      onComplete()
-    }
-  }
-}
-
-export function SmartClearUnpublishAction(props) {
-  const { id, onComplete } = props
-  return {
-    label: 'Cascade Clear Unpublished',
-    icon:  EyeOpenIcon,
-    tone:  'positive',
-    onHandle: async () => {
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-      const { portfolios, artworks } = await collectAllChildren(client, id)
-      if (!window.confirm(
-        `Remove "unpublished" from ${artworks.length} artworks and ${portfolios.length} portfolios?`
-      )) return
-      for (const pid of portfolios) {
-        await clearUnpublished(client, pid)
-      }
-      for (const aid of artworks) {
-        await clearUnpublished(client, aid)
-      }
-      onComplete()
-    }
-  }
-}
-
 export function SmartDeleteAction(props) {
   const { id, onComplete, type } = props
   return {
@@ -109,6 +41,7 @@ export function SmartDeleteAction(props) {
     tone:  'critical',
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
+      
       if (!(await hasChildren(client, id))) {
         if (window.confirm('Delete this portfolio permanently?')) {
           await client.mutate([{ delete: { id } }])
@@ -116,17 +49,25 @@ export function SmartDeleteAction(props) {
         }
         return
       }
+      
       const { portfolios, artworks } = await collectAllChildren(client, id)
       const input = prompt(
-        `⚠️ CASCADE DELETE ⚠️\nThis will delete:\n• 1 portfolio\n• ${artworks.length} artworks\nType "DELETE" to confirm:`
+        `⚠️ CASCADE DELETE ⚠️\nThis will PERMANENTLY delete:\n• ${portfolios.length} portfolios\n• ${artworks.length} artworks\n\nType "DELETE" to confirm:`
       )
       if (input !== 'DELETE') return
-      const mutations = [
-        ...artworks.map(aid => ({ delete: { id: aid } })),
-        ...portfolios.reverse().map(pid => ({ delete: { id: pid } }))
-      ]
-      await client.mutate(mutations)
-      onComplete()
+      
+      try {
+        const mutations = [
+          ...artworks.map(aid => ({ delete: { id: aid } })),
+          ...portfolios.reverse().map(pid => ({ delete: { id: pid } }))
+        ]
+        await client.mutate(mutations)
+        alert('All documents deleted successfully')
+        onComplete()
+      } catch (error) {
+        console.error('Error during cascade delete:', error)
+        alert('Error occurred during deletion. Check console for details.')
+      }
     }
   }
 }

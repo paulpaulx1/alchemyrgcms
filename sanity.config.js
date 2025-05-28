@@ -5,8 +5,6 @@ import { visionTool } from '@sanity/vision'
 import { colorInput } from '@sanity/color-input'
 import { schemaTypes } from './schemaTypes'
 import {
-  SmartMarkUnpublishAction,
-  SmartClearUnpublishAction,
   SmartDeleteAction
 } from './cascadeActions'
 
@@ -17,14 +15,19 @@ export default defineConfig({
   dataset: 'production',
   plugins: [structureTool(), visionTool(), colorInput()],
   schema: { types: schemaTypes },
+  // Add search configuration to make artworks searchable by portfolio name
+  __experimental_search: [
+    {
+      type: 'artwork',
+      query: '*[_type == "artwork" && (title match $searchTerm || portfolio->title match $searchTerm)]'
+    }
+  ],
   document: {
     actions: (prev, { schemaType, getClient }) => {
       if (schemaType === 'portfolio') {
         return [
           ...prev,
-          props => SmartMarkUnpublishAction({ ...props, getClient }),
-          props => SmartClearUnpublishAction({ ...props, getClient }),
-          props => SmartDeleteAction({   ...props, getClient })
+          props => SmartDeleteAction({ ...props, getClient })
         ]
       }
       return prev
