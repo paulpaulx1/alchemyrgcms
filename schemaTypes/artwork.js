@@ -219,7 +219,7 @@ export default {
     select: {
       title: 'title',
       displayTitle: 'displayTitle',
-      portfolio: 'portfolio.title',
+      portfolioTitle: 'portfolio.title', // Changed from 'portfolio' to 'portfolioTitle'
       media: 'image',
       lowResMedia: 'lowResImage',
       videoThumbnail: 'videoThumbnail',
@@ -227,12 +227,13 @@ export default {
       audioThumbnail: 'audioThumbnail',
       mediaType: 'mediaType',
       slug: 'slug.current',
+      year: 'year',
     },
     prepare(selection) {
       const {
         title,
         displayTitle,
-        portfolio,
+        portfolioTitle, // Updated variable name
         media,
         lowResMedia,
         videoThumbnail,
@@ -240,6 +241,7 @@ export default {
         audioThumbnail,
         mediaType,
         slug,
+        year,
       } = selection
       let previewMedia
       switch (mediaType) {
@@ -269,7 +271,7 @@ export default {
 
       return {
         title: displayName,
-        subtitle: portfolio ? `Portfolio: ${portfolio}` : '',
+        subtitle: portfolioTitle ? `📁 ${portfolioTitle}${year ? ` • ${year}` : ''}` : 'No portfolio assigned',
         media: previewMedia,
       }
     },

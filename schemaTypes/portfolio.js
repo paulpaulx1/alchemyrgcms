@@ -100,12 +100,28 @@ export default {
       year: 'year',
       media: 'coverImage',
       parentTitle: 'parentPortfolio.title',
+      // Add artwork count for better search context
+      artworkCount: '*[_type == "artwork" && portfolio._ref == ^._id]',
     },
     prepare(selection) {
-      const {title, year, parentTitle} = selection
+      const {title, year, parentTitle, artworkCount} = selection
+      const count = Array.isArray(artworkCount) ? artworkCount.length : 0
+      
+      let subtitle = ''
+      if (parentTitle) {
+        subtitle = `📁 Sub-portfolio of ${parentTitle}`
+      } else if (count > 0) {
+        subtitle = `${count} artwork${count !== 1 ? 's' : ''}`
+      }
+      if (year && subtitle) {
+        subtitle += ` • ${year}`
+      } else if (year) {
+        subtitle = year
+      }
+      
       return {
         ...selection,
-        subtitle: parentTitle ? `Sub-portfolio of ${parentTitle}` : year ? `${year}` : '',
+        subtitle: subtitle,
       }
     },
   },
