@@ -9,7 +9,8 @@ import {
   SmartCascadeUnpublishAction,
   SmartMarkUnpublishAction,
   SmartClearUnpublishAction,
-  SmartDeleteAction
+  SmartDeleteAction,
+  CleanupCorruptedDraftsAction
 } from './cascadeActions'
 
 export default defineConfig({
@@ -35,7 +36,8 @@ export default defineConfig({
           props => SmartCascadeUnpublishAction({ ...props, getClient }),
           props => SmartMarkUnpublishAction({ ...props, getClient }),
           props => SmartClearUnpublishAction({ ...props, getClient }),
-          props => SmartDeleteAction({ ...props, getClient })
+          props => SmartDeleteAction({ ...props, getClient }),
+          props => CleanupCorruptedDraftsAction({ ...props, getClient })
         ]
       }
       return prev
