@@ -19,6 +19,13 @@ export default defineConfig({
   dataset: 'production',
   plugins: [structureTool(), visionTool(), colorInput()],
   schema: { types: schemaTypes },
+  // Add search configuration to make artworks searchable by portfolio name
+  __experimental_search: [
+    {
+      type: 'artwork',
+      query: '*[_type == "artwork" && (title match $searchTerm || portfolio->title match $searchTerm)]'
+    }
+  ],
   document: {
     actions: (prev, { schemaType, getClient }) => {
       if (schemaType === 'portfolio') {
