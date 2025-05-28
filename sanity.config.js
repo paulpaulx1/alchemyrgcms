@@ -5,11 +5,6 @@ import { visionTool } from '@sanity/vision'
 import { colorInput } from '@sanity/color-input'
 import { schemaTypes } from './schemaTypes'
 import {
-  SmartCascadePublishAction,
-  SafeCascadeUnpublishAction,
-  SimpleUnpublishAction,
-  SmartMarkUnpublishAction,
-  SmartClearUnpublishAction,
   SmartDeleteAction
 } from './cascadeActions'
 
@@ -32,11 +27,6 @@ export default defineConfig({
       if (schemaType === 'portfolio') {
         return [
           ...prev,
-          props => SmartCascadePublishAction({ ...props, getClient }),
-          props => SafeCascadeUnpublishAction({ ...props, getClient }),
-          props => SimpleUnpublishAction({ ...props, getClient }),
-          props => SmartMarkUnpublishAction({ ...props, getClient }),
-          props => SmartClearUnpublishAction({ ...props, getClient }),
           props => SmartDeleteAction({ ...props, getClient })
         ]
       }
