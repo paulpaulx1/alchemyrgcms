@@ -1,6 +1,7 @@
 // sanity-cms/cascadeActions.js
-import { TrashIcon, EyeClosedIcon, EyeOpenIcon } from '@sanity/icons'
+import { TrashIcon, EyeClosedIcon, EyeOpenIcon, PublishIcon } from '@sanity/icons'
 import { useDocumentOperation } from 'sanity'
+import { useState, useEffect } from 'react'
 
 async function hasChildren(client, portfolioId) {
   const { hasChildPortfolios, hasArtworks } = await client.fetch(
@@ -52,6 +53,155 @@ async function clearUnpublished(client, docId) {
   const cleaned = cleanTitle(doc.title || '')
   if (cleaned !== doc.title) {
     await client.patch(docId).set({ title: cleaned }).commit()
+  }
+}
+
+export function SmartCascadePublishAction(props) {
+  const { id, onComplete, type } = props
+  const { publish } = useDocumentOperation(id, type)
+  const [isPublishing, setIsPublishing] = useState(false)
+
+  useEffect(() => {
+    // Check if publishing is complete
+    if (isPublishing && !props.draft) {
+      setIsPublishing(false)
+    }
+  }, [props.draft, isPublishing])
+
+  return {
+    label: isPublishing ? 'Publishing...' : 'Cascade Publish',
+    icon: PublishIcon,
+    tone: 'positive',
+    disabled: publish.disabled || isPublishing,
+    onHandle: async () => {
+      const client = props.getClient({ apiVersion: '2023-03-01' })
+      const { portfolios, artworks } = await collectAllChildren(client, id)
+      
+      if (!window.confirm(
+        `Publish ${artworks.length} artworks and ${portfolios.length} portfolios (including this one)?`
+      )) return
+
+      setIsPublishing(true)
+
+      try {
+        // First, publish all child artworks
+        for (const aid of artworks) {
+          // Check if artwork has a draft version that needs publishing
+          const artworkDraft = await client.getDocument(`drafts.${aid}`)
+          if (artworkDraft) {
+            // Use client mutations to publish the draft
+            await client.mutate([
+              { 
+                createOrReplace: { 
+                  ...artworkDraft, 
+                  _id: aid // Remove drafts. prefix
+                } 
+              },
+              { delete: { id: `drafts.${aid}` } }
+            ])
+          }
+        }
+
+        // Then publish all portfolios (children first, then parent)
+        const sortedPortfolios = [...portfolios].reverse() // Start with deepest children
+        for (const pid of sortedPortfolios) {
+          const portfolioDraft = await client.getDocument(`drafts.${pid}`)
+          if (portfolioDraft) {
+            await client.mutate([
+              { 
+                createOrReplace: { 
+                  ...portfolioDraft, 
+                  _id: pid 
+                } 
+              },
+              { delete: { id: `drafts.${pid}` } }
+            ])
+          }
+        }
+
+        // Finally, publish the main portfolio using the document operation
+        publish.execute()
+        onComplete()
+      } catch (error) {
+        console.error('Error during cascade publish:', error)
+        setIsPublishing(false)
+        alert('Error occurred during publishing. Check console for details.')
+      }
+    }
+  }
+}
+
+export function SmartCascadeUnpublishAction(props) {
+  const { id, onComplete, type } = props
+  const { unpublish } = useDocumentOperation(id, type)
+  const [isUnpublishing, setIsUnpublishing] = useState(false)
+
+  useEffect(() => {
+    // Check if unpublishing is complete - when published becomes null
+    if (isUnpublishing && !props.published) {
+      setIsUnpublishing(false)
+    }
+  }, [props.published, isUnpublishing])
+
+  return {
+    label: isUnpublishing ? 'Unpublishing...' : 'Cascade Unpublish',
+    icon: EyeClosedIcon,
+    tone: 'caution',
+    disabled: unpublish.disabled || isUnpublishing || !props.published,
+    onHandle: async () => {
+      const client = props.getClient({ apiVersion: '2023-03-01' })
+      const { portfolios, artworks } = await collectAllChildren(client, id)
+      
+      if (!window.confirm(
+        `Unpublish ${artworks.length} artworks and ${portfolios.length} portfolios (including this one)?`
+      )) return
+
+      setIsUnpublishing(true)
+
+      try {
+        // First unpublish all child artworks
+        for (const aid of artworks) {
+          const publishedArtwork = await client.getDocument(aid)
+          if (publishedArtwork) {
+            // Create draft version and delete published
+            await client.mutate([
+              { 
+                createOrReplace: { 
+                  ...publishedArtwork, 
+                  _id: `drafts.${aid}` 
+                } 
+              },
+              { delete: { id: aid } }
+            ])
+          }
+        }
+
+        // Then unpublish child portfolios (deepest first)
+        const childPortfolios = portfolios.filter(pid => pid !== id)
+        for (const pid of childPortfolios) {
+          const publishedPortfolio = await client.getDocument(pid)
+          if (publishedPortfolio) {
+            await client.mutate([
+              { 
+                createOrReplace: { 
+                  ...publishedPortfolio, 
+                  _id: `drafts.${pid}` 
+                } 
+              },
+              { delete: { id: pid } }
+            ])
+          }
+        }
+
+        // Finally, unpublish the main portfolio using the document operation
+        unpublish.execute()
+        onComplete()
+      } catch (error) {
+        console.error('Error during cascade unpublish:', error)
+        setIsUnpublishing(false)
+        alert('Error occurred during unpublishing. Check console for details.')
+      }
+    }
   }
 }
 
