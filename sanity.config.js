@@ -37,7 +37,6 @@ export default defineConfig({
           props => SmartMarkUnpublishAction({ ...props, getClient }),
           props => SmartClearUnpublishAction({ ...props, getClient }),
           props => SmartDeleteAction({ ...props, getClient }),
-          props => CleanupCorruptedDraftsAction({ ...props, getClient })
         ]
       }
       return prev
