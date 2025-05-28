@@ -19,11 +19,21 @@ export default {
       },
       validation: (Rule) => Rule.required(),
     },
-    
+
     {
       name: 'description',
       title: 'Description',
       type: 'text',
+    },
+    {
+      name: 'richTextBlock',
+      title: 'Rich Text Block',
+      type: 'array',
+      of: [
+        {
+          type: 'block',
+        },
+      ],
     },
     {
       name: 'coverImage',
@@ -38,7 +48,8 @@ export default {
       title: 'Cover Artwork',
       type: 'reference',
       to: [{type: 'artwork'}],
-      description: 'Select an artwork to use as the portfolio cover (will override the Cover Image if both are set)'
+      description:
+        'Select an artwork to use as the portfolio cover (will override the Cover Image if both are set)',
     },
     {
       name: 'parentPortfolio',
