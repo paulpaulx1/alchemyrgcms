@@ -6,11 +6,11 @@ import { colorInput } from '@sanity/color-input'
 import { schemaTypes } from './schemaTypes'
 import {
   SmartCascadePublishAction,
-  SmartCascadeUnpublishAction,
+  SafeCascadeUnpublishAction,
+  SimpleUnpublishAction,
   SmartMarkUnpublishAction,
   SmartClearUnpublishAction,
-  SmartDeleteAction,
-  CleanupCorruptedDraftsAction
+  SmartDeleteAction
 } from './cascadeActions'
 
 export default defineConfig({
@@ -33,10 +33,11 @@ export default defineConfig({
         return [
           ...prev,
           props => SmartCascadePublishAction({ ...props, getClient }),
-          props => SmartCascadeUnpublishAction({ ...props, getClient }),
+          props => SafeCascadeUnpublishAction({ ...props, getClient }),
+          props => SimpleUnpublishAction({ ...props, getClient }),
           props => SmartMarkUnpublishAction({ ...props, getClient }),
           props => SmartClearUnpublishAction({ ...props, getClient }),
-          props => SmartDeleteAction({ ...props, getClient }),
+          props => SmartDeleteAction({ ...props, getClient })
         ]
       }
       return prev

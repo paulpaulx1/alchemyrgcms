@@ -56,58 +56,6 @@ async function clearUnpublished(client, docId) {
   }
 }
 
-// Helper function to clean up corrupted drafts
-async function cleanupCorruptedDrafts(client) {
-  // Find documents with double "drafts.drafts." prefix
-  const corruptedDrafts = await client.fetch(`
-    *[_id match "drafts.drafts.*"]{_id}
-  `)
-  
-  console.log('Found corrupted drafts:', corruptedDrafts)
-  
-  // Delete corrupted drafts
-  for (const doc of corruptedDrafts) {
-    try {
-      await client.delete(doc._id)
-      console.log(`Deleted corrupted draft: ${doc._id}`)
-    } catch (error) {
-      console.error(`Failed to delete ${doc._id}:`, error)
-    }
-  }
-}
-
-// Helper function to force unpublish by removing references temporarily
-async function forceUnpublishWithReferences(client, docId) {
-  try {
-    // First clean up any corrupted drafts
-    await cleanupCorruptedDrafts(client)
-    
-    // Try normal unpublish via client
-    await client.mutate([{ delete: { id: docId } }])
-  } catch (error) {
-    if (error.message.includes('references')) {
-      console.log(`Document ${docId} has references, using force unpublish method`)
-      
-      // Get the published document
-      const publishedDoc = await client.getDocument(docId)
-      if (!publishedDoc) return
-      
-      // Create draft version first
-      await client.mutate([{ 
-        createOrReplace: { 
-          ...publishedDoc, 
-          _id: `drafts.${docId}` 
-        } 
-      }])
-      
-      // Force delete the published version using direct delete
-      await client.delete(docId)
-    } else {
-      throw error
-    }
-  }
-}
-
 export function SmartCascadePublishAction(props) {
   const { id, onComplete, type } = props
   const { publish } = useDocumentOperation(id, type)
@@ -183,37 +131,74 @@ export function SmartCascadePublishAction(props) {
   }
 }
 
-export function SmartCascadeUnpublishAction(props) {
+export function SafeCascadeUnpublishAction(props) {
   const { id, onComplete, type } = props
+  const { unpublish } = useDocumentOperation(id, type)
   const [isUnpublishing, setIsUnpublishing] = useState(false)
 
   return {
-    label: isUnpublishing ? 'Unpublishing...' : 'Cascade Unpublish',
+    label: isUnpublishing ? 'Unpublishing...' : 'Safe Cascade Unpublish',
     icon: EyeClosedIcon,
     tone: 'caution',
-    disabled: isUnpublishing,
+    disabled: isUnpublishing || unpublish.disabled,
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
+      const { portfolios, artworks } = await collectAllChildren(client, id)
       
       if (!window.confirm(
-        `This will clean up any corrupted drafts and unpublish this portfolio and all its contents. Continue?`
+        `This will unpublish:\n• ${portfolios.length} portfolios\n• ${artworks.length} artworks\n\nThey will become drafts but won't be deleted. Continue?`
       )) return
 
       setIsUnpublishing(true)
 
       try {
-        // Step 1: Clean up corrupted drafts first
-        await cleanupCorruptedDrafts(client)
-        
-        // Step 2: Get all children
-        const { portfolios, artworks } = await collectAllChildren(client, id)
-        const allDocuments = [...artworks, ...portfolios]
-        
-        // Step 3: Force unpublish all documents
-        for (const docId of allDocuments) {
-          await forceUnpublishWithReferences(client, docId)
+        // Step 1: Unpublish all child artworks first (they should unpublish easily)
+        console.log('Unpublishing artworks...')
+        for (const aid of artworks) {
+          try {
+            const publishedArtwork = await client.getDocument(aid)
+            if (publishedArtwork) {
+              // Create draft version
+              await client.createOrReplace({
+                ...publishedArtwork,
+                _id: `drafts.${aid}`
+              })
+              // Delete published version
+              await client.delete(aid)
+              console.log(`Unpublished artwork: ${aid}`)
+            }
+          } catch (error) {
+            console.warn(`Could not unpublish artwork ${aid}:`, error.message)
+            // Continue with other artworks
+          }
         }
 
+        // Step 2: Unpublish child portfolios (reverse order - deepest first)
+        console.log('Unpublishing child portfolios...')
+        const childPortfolios = portfolios.filter(pid => pid !== id).reverse()
+        for (const pid of childPortfolios) {
+          try {
+            const publishedPortfolio = await client.getDocument(pid)
+            if (publishedPortfolio) {
+              // Create draft version
+              await client.createOrReplace({
+                ...publishedPortfolio,
+                _id: `drafts.${pid}`
+              })
+              // Delete published version
+              await client.delete(pid)
+              console.log(`Unpublished portfolio: ${pid}`)
+            }
+          } catch (error) {
+            console.warn(`Could not unpublish portfolio ${pid}:`, error.message)
+            // Continue with other portfolios
+          }
+        }
+
+        // Step 3: Finally unpublish the main portfolio using Sanity's built-in operation
+        console.log('Unpublishing main portfolio...')
+        unpublish.execute()
+        
         setIsUnpublishing(false)
         onComplete()
       } catch (error) {
@@ -225,25 +210,61 @@ export function SmartCascadeUnpublishAction(props) {
   }
 }
 
+export function SimpleUnpublishAction(props) {
+  const { id, onComplete, type } = props
+  const { unpublish } = useDocumentOperation(id, type)
+  const [isUnpublishing, setIsUnpublishing] = useState(false)
+
+  return {
+    label: isUnpublishing ? 'Unpublishing...' : 'Simple Unpublish',
+    icon: EyeClosedIcon,
+    tone: 'caution',
+    disabled: isUnpublishing || unpublish.disabled,
+    onHandle: async () => {
+      if (!window.confirm('Unpublish this portfolio only (no cascade)?')) return
+
+      setIsUnpublishing(true)
+
+      try {
+        // Just use Sanity's built-in unpublish
+        unpublish.execute()
+        setIsUnpublishing(false)
+        onComplete()
+      } catch (error) {
+        console.error('Error during unpublish:', error)
+        setIsUnpublishing(false)
+        alert('Could not unpublish. This usually means other documents reference it.')
+      }
+    }
+  }
+}
+
 export function SmartMarkUnpublishAction(props) {
   const { id, onComplete, type } = props
   return {
-    label: 'Cascade Mark Unpublish',
+    label: 'Mark as "Unpublished"',
     icon:  EyeClosedIcon,
     tone:  'caution',
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
       const { portfolios, artworks } = await collectAllChildren(client, id)
       if (!window.confirm(
-        `Mark ${artworks.length} artworks and ${portfolios.length - 1} sub-portfolios as "unpublished"?`
+        `Add "unpublished" to titles of:\n• ${portfolios.length} portfolios\n• ${artworks.length} artworks\n\n(This doesn't actually unpublish them)`
       )) return
-      for (const pid of portfolios) {
-        await markUnpublished(client, pid)
+      
+      try {
+        for (const pid of portfolios) {
+          await markUnpublished(client, pid)
+        }
+        for (const aid of artworks) {
+          await markUnpublished(client, aid)
+        }
+        alert('Added "unpublished" to all titles')
+        onComplete()
+      } catch (error) {
+        console.error('Error marking unpublished:', error)
+        alert('Error occurred. Check console for details.')
       }
-      for (const aid of artworks) {
-        await markUnpublished(client, aid)
-      }
-      onComplete()
     }
   }
 }
@@ -251,22 +272,29 @@ export function SmartMarkUnpublishAction(props) {
 export function SmartClearUnpublishAction(props) {
   const { id, onComplete } = props
   return {
-    label: 'Cascade Clear Unpublished',
+    label: 'Clear "Unpublished" from Titles',
     icon:  EyeOpenIcon,
     tone:  'positive',
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
       const { portfolios, artworks } = await collectAllChildren(client, id)
       if (!window.confirm(
-        `Remove "unpublished" from ${artworks.length} artworks and ${portfolios.length} portfolios?`
+        `Remove "unpublished" from titles of:\n• ${portfolios.length} portfolios\n• ${artworks.length} artworks`
       )) return
-      for (const pid of portfolios) {
-        await clearUnpublished(client, pid)
+      
+      try {
+        for (const pid of portfolios) {
+          await clearUnpublished(client, pid)
+        }
+        for (const aid of artworks) {
+          await clearUnpublished(client, aid)
+        }
+        alert('Removed "unpublished" from all titles')
+        onComplete()
+      } catch (error) {
+        console.error('Error clearing unpublished:', error)
+        alert('Error occurred. Check console for details.')
       }
-      for (const aid of artworks) {
-        await clearUnpublished(client, aid)
-      }
-      onComplete()
     }
   }
 }
@@ -279,6 +307,7 @@ export function SmartDeleteAction(props) {
     tone:  'critical',
     onHandle: async () => {
       const client = props.getClient({ apiVersion: '2023-03-01' })
+      
       if (!(await hasChildren(client, id))) {
         if (window.confirm('Delete this portfolio permanently?')) {
           await client.mutate([{ delete: { id } }])
@@ -286,48 +315,24 @@ export function SmartDeleteAction(props) {
         }
         return
       }
+      
       const { portfolios, artworks } = await collectAllChildren(client, id)
       const input = prompt(
-        `⚠️ CASCADE DELETE ⚠️\nThis will delete:\n• 1 portfolio\n• ${artworks.length} artworks\nType "DELETE" to confirm:`
+        `⚠️ CASCADE DELETE ⚠️\nThis will PERMANENTLY delete:\n• ${portfolios.length} portfolios\n• ${artworks.length} artworks\n\nType "DELETE" to confirm:`
       )
       if (input !== 'DELETE') return
-      const mutations = [
-        ...artworks.map(aid => ({ delete: { id: aid } })),
-        ...portfolios.reverse().map(pid => ({ delete: { id: pid } }))
-      ]
-      await client.mutate(mutations)
-      onComplete()
-    }
-  }
-}
-
-// Quick fix action for corrupted drafts
-export function CleanupCorruptedDraftsAction(props) {
-  const { onComplete } = props
-  const [isCleaning, setIsCleaning] = useState(false)
-
-  return {
-    label: isCleaning ? 'Cleaning...' : 'Cleanup Corrupted Drafts',
-    icon: TrashIcon,
-    tone: 'critical',
-    disabled: isCleaning,
-    onHandle: async () => {
-      if (!window.confirm(
-        'This will delete any documents with corrupted "drafts.drafts.*" IDs. Continue?'
-      )) return
-
-      setIsCleaning(true)
-      const client = props.getClient({ apiVersion: '2023-03-01' })
-
+      
       try {
-        await cleanupCorruptedDrafts(client)
-        alert('Corrupted drafts cleaned up successfully!')
-        setIsCleaning(false)
+        const mutations = [
+          ...artworks.map(aid => ({ delete: { id: aid } })),
+          ...portfolios.reverse().map(pid => ({ delete: { id: pid } }))
+        ]
+        await client.mutate(mutations)
+        alert('All documents deleted successfully')
         onComplete()
       } catch (error) {
-        console.error('Error cleaning up:', error)
-        setIsCleaning(false)
-        alert('Error occurred during cleanup. Check console for details.')
+        console.error('Error during cascade delete:', error)
+        alert('Error occurred during deletion. Check console for details.')
       }
     }
   }
