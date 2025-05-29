@@ -40,10 +40,18 @@ export default {
           if (input.startsWith('no-title-')) {
             return input // Don't modify auto-generated slugs
           }
-          return input
+
+          // Transliterate accented characters
+          const transliterated = input
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
             .toLowerCase()
-            .replace(/\s+/g, '-')
-            .replace(/[^\w\-]+/g, '')
+
+          return transliterated
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .replace(/[^a-z0-9\-]/g, '') // Keep only letters, numbers, hyphens
+            .replace(/-+/g, '-') // Replace multiple hyphens with single
+            .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
             .slice(0, 96)
         },
       },
@@ -195,7 +203,8 @@ export default {
       name: 'order',
       title: 'Display Order',
       type: 'number',
-      description: 'Controls the order of artworks within a portfolio (higher numbers appear first)',
+      description:
+        'Controls the order of artworks within a portfolio (higher numbers appear first)',
     },
   ],
   orderings: [
