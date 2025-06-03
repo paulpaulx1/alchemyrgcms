@@ -2,6 +2,28 @@ export default {
   name: 'artwork',
   title: 'Artwork',
   type: 'document',
+  __experimental_search: [
+    {
+      path: 'title',
+      weight: 10,
+      mapWith: 'lowercase'
+    },
+    {
+      path: 'slug.current',
+      weight: 8,
+      mapWith: 'lowercase'
+    },
+    {
+      path: 'portfolio.title',
+      weight: 5,
+      mapWith: 'lowercase'
+    },
+    {
+      path: 'description',
+      weight: 2,
+      mapWith: 'lowercase'
+    }
+  ],
   fields: [
     {
       name: 'displayTitle',
