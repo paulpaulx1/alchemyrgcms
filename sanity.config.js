@@ -9,20 +9,34 @@ import {
 } from './cascadeActions'
 
 export default defineConfig({
-  name:    'default',
-  title:   'AlchemyRG',
+  name: 'default',
+  title: 'AlchemyRG',
   projectId: '5lwtjnp5',
   dataset: 'production',
   plugins: [structureTool(), visionTool(), colorInput()],
   schema: { types: schemaTypes },
-  // Add search configuration to make artworks searchable by portfolio name
-  __experimental_search: [
-    {
-      type: 'artwork',
-      query: '*[_type == "artwork" && (title match $searchTerm || portfolio->title match $searchTerm)]'
-    }
-  ],
+  
+  // Modern search configuration
+  search: {
+    unstable_enableNewSearch: true,
+  },
+  
   document: {
+    // Enhanced search for artworks
+    search: (prev, context) => {
+      if (context.schemaType === 'artwork') {
+        return [
+          {path: 'title', weight: 10, mapWith: 'lowercase'},
+          {path: 'slug.current', weight: 8, mapWith: 'lowercase'},
+          {path: 'portfolio.title', weight: 5, mapWith: 'lowercase'},
+          {path: 'description', weight: 2, mapWith: 'lowercase'},
+          {path: 'medium', weight: 1, mapWith: 'lowercase'},
+          {path: 'year', weight: 1}
+        ]
+      }
+      return prev
+    },
+    
     actions: (prev, { schemaType, getClient }) => {
       if (schemaType === 'portfolio') {
         return [
