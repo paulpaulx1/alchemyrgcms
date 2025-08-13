@@ -143,6 +143,37 @@ export default {
       description: 'URL to YouTube, Vimeo, etc. (optional, use this or upload a video file)',
       hidden: ({document}) => document?.mediaType !== 'video',
     },
+    // NEW MUX FIELDS - Add these after the existing video fields
+    {
+      name: 'muxPlaybackId',
+      title: 'Mux Playback ID',
+      type: 'string',
+      hidden: ({document}) => document?.mediaType !== 'video',
+      description: 'Auto-populated when video is uploaded to Mux',
+      readOnly: true,
+    },
+    {
+      name: 'muxAssetId', 
+      title: 'Mux Asset ID',
+      type: 'string',
+      hidden: true, // Keep hidden, just for API reference
+      readOnly: true,
+    },
+    {
+      name: 'muxStatus',
+      title: 'Mux Upload Status',
+      type: 'string',
+      options: {
+        list: [
+          {title: 'Pending', value: 'pending'},
+          {title: 'Ready', value: 'ready'},
+          {title: 'Error', value: 'errored'}
+        ]
+      },
+      hidden: ({document}) => document?.mediaType !== 'video',
+      readOnly: true,
+    },
+    // END MUX FIELDS
     {
       name: 'pdfFile',
       title: 'PDF File',

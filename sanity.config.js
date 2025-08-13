@@ -7,6 +7,7 @@ import { schemaTypes } from './schemaTypes'
 import {
   SmartDeleteAction
 } from './cascadeActions'
+import { UploadToMuxAction } from './actions/uploadToMux' // Add this import
 
 export default defineConfig({
   name: 'default',
@@ -44,6 +45,15 @@ export default defineConfig({
           props => SmartDeleteAction({ ...props, getClient })
         ]
       }
+      
+      // Add Mux action for artworks
+      if (schemaType === 'artwork') {
+        return [
+          ...prev,
+          props => UploadToMuxAction({ ...props, getClient })
+        ]
+      }
+      
       return prev
     }
   }

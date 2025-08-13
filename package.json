@@ -17,11 +17,13 @@
   ],
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
+    "@mux/mux-node": "^12.4.0",
     "@sanity/client": "^6.28.3",
     "@sanity/color-input": "^4.0.3",
     "@sanity/vision": "^3.79.0",
     "child_process": "^1.0.2",
     "dotenv": "^16.4.7",
+    "form-data": "^4.0.4",
     "fs-extra": "^11.3.0",
     "googleapis": "^146.0.0",
     "image-size": "^2.0.0",
